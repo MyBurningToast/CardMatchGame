@@ -285,6 +285,67 @@ int main() {
     std::cout << "Created " << swapchainImageViews.size() << " image views\n";
 
 
+
+    // create the render pass
+    // a render pass describes what happens to the images during a frame
+
+    VkAttachmentDescription colorAttachment{}; // storeed recource list for whole render pass
+    colorAttachment.format = surfaceFormat.format; // match swapchain format
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // 1 sample per pixel
+
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear the previous image with solid color
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep the rendered result so it can be presented
+
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // not using stencils
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // done care about previous images layout
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // must be ready to present to the screen when done
+    
+    // a render pass is made of one or more subpasses
+    // but we only need a sinlge subpass that writes color to our only attachment
+
+    VkAttachmentReference colorAttachmentRef{}; // stores info for a subpass
+    colorAttachmentRef.attachment = 0; // index into attachment array
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // best layout for writing color during rendering
+
+    VkSubpassDescription subpass{}; // TODO: where we will record draw commands
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // this is a graphics subpass (not compute)
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+
+    // the swapchain might still be being presented from the previous frame
+    // the gpu wants to write the next frames colour into the same memroy
+    // dependancy is a syncronisation rule for this render pass that waits until the image is safe to write to
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // wait on: stuff before this render pass
+    dependency.dstSubpass = 0; // applies to: our subpass
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // wait at: color attachment output stage
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // block the color write stage
+    dependency.srcAccessMask = 0; // no prior access to sync with
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // guard: writing color
+
+    VkRenderPassCreateInfo renderPassCreateInfo{};
+    renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassCreateInfo.attachmentCount = 1;
+    renderPassCreateInfo.pAttachments = &colorAttachment;
+    renderPassCreateInfo.subpassCount = 1;
+    renderPassCreateInfo.pSubpasses = &subpass;
+    renderPassCreateInfo.dependencyCount = 1;
+    renderPassCreateInfo.pDependencies = &dependency;
+
+    VkRenderPass renderPass;
+    VkResult renderPassResult = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
+    if (renderPassResult != VK_SUCCESS) {
+        std::cerr << "failed to create render pass\n";
+        return -1;
+    }
+
+    std::cout << "render pass created\n";
+
+
+
+
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested
     VkQueue graphicsQueue;
@@ -300,6 +361,8 @@ int main() {
 
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+    vkDestroyRenderPass(device, renderPass, nullptr);
+
     for (auto imageView : swapchainImageViews) {
         vkDestroyImageView(device, imageView, nullptr);
     }
