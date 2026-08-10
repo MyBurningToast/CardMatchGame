@@ -189,7 +189,6 @@ int main() {
     // specify the count so that vulkan knows how many entries to go along from the start of the array pointer
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
-    deviceCreateInfo.enabledLayerCount = 0; // TODO: add validation layers
 
     VkDevice device; // the logical device handel
     VkResult deviceResult = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device); // create a device for our physical device
@@ -244,6 +243,7 @@ int main() {
     }
 
     std::cout << "Swapchain created with " << imageCount << " images\n";
+
 
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested above
