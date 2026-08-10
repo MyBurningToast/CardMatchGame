@@ -94,8 +94,44 @@ int main() {
 
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
-    std::cout << deviceProps.deviceName;
-    return 0;
+    std::cout << "Using GPU: " << deviceProps.deviceName << "\n";
+
+    // create logical device. the logical device is the interface to the gpu
+    // vulkan needs to know how many queues we want from the graphics queue faimily and what priority 0-1
+    float queuePriority = 1.0f;
+
+    // a queue is where we submit work for the gpu to execute
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO; //sType tells vulkan what struct it has been given
+    queueCreateInfo.queueFamilyIndex = graphicsQueieFamilyIndex;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    // the special GPU features we want enabled (for now, none)
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    VkDeviceCreateInfo deviceCreateInfo{};
+    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+    deviceCreateInfo.queueCreateInfoCount = 1;
+    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+    deviceCreateInfo.enabledExtensionCount = 0; // TODO: add device extentions for swapchain
+    deviceCreateInfo.enabledLayerCount = 0; // TODO: add validation layers
+
+    VkDevice device; // the logical device handel
+    VkResult deviceResult = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device); // create a device for our physical device
+
+    if (deviceResult != VK_SUCCESS) {
+        std::cerr << "failed to create logical device\n";
+        return -1;
+    }
+
+    // get a handle to the graphics queue so we can submit commands to it
+    // queueIndex 0 is the first (and only) queue we requested above
+    VkQueue graphicsQueue;
+    vkGetDeviceQueue(device, graphicsQueieFamilyIndex, 0, &graphicsQueue);
+    std::cout << "device and graphics queue created\n";
 
     // keep window open
     while (!glfwWindowShouldClose(window)) {
@@ -103,10 +139,11 @@ int main() {
     }
 
     // cleanup
-    vkDestroyInstance(instance, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
-
-    std::cout << "done\n";
+    // we need to destroy the vulkan stuff in the reverse order they were created
+    // this is beacuse they depend on each other
+    vkDestroyDevice(device, nullptr);
+    vkDestroyInstance(instance, nullptr);
     return 0;
 }
