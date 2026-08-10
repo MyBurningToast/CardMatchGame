@@ -37,3 +37,27 @@ target_link_libraries(CardMatchGame PRIVATE
     shell32
     user32
 )
+
+# Compile shaders
+# Vulkan cant read shader source code directly. it needs to be pre compiled bytecode called SPIR-V
+# Vulkan SDK has an in built tool for this
+
+# btw i basicly copy pasted this from somones github so dont ask me about the syntax for this lol
+find_program(GLSLC glslc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+message(STATUS "GLSLC found at: ${GLSLC}")
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/shaders/vert.spv
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/shaders
+    COMMAND ${GLSLC} ${CMAKE_SOURCE_DIR}/shaders/triangle.vert -o ${CMAKE_BINARY_DIR}/shaders/vert.spv
+    DEPENDS ${CMAKE_SOURCE_DIR}/shaders/triangle.vert
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/shaders/frag.spv
+    COMMAND ${GLSLC} ${CMAKE_SOURCE_DIR}/shaders/triangle.frag -o ${CMAKE_BINARY_DIR}/shaders/frag.spv
+    DEPENDS ${CMAKE_SOURCE_DIR}/shaders/triangle.frag
+)
+
+add_custom_target(Shaders DEPENDS ${CMAKE_BINARY_DIR}/shaders/vert.spv ${CMAKE_BINARY_DIR}/shaders/frag.spv)
+add_dependencies(CardMatchGame Shaders)
