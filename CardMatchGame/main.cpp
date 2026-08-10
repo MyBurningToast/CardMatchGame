@@ -3,12 +3,52 @@
 #include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
+#include <cstring>
+
+bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers) {
+    uint32_t layerCount = 0;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+    // for every layer, check it exists somwhere in the available list
+    for (const char* layerName : validationLayers) {
+        bool found = false;
+        for (const auto& layerProps : availableLayers) {
+            if (strcmp(layerName, layerProps.layerName) == 0) { // compare strings
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+    }
+    return true;
+}
 
 int main() {
+
+    const std::vector<const char*> validationLayers = {
+        "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
+    };
+
+    // vulkans validation layers help find errors by intercepting api calls.
+    // Without it, the gpu will just crash with no error info
+#ifdef NDEBUG
+    const bool enableValidationLayers = false; // off in release builds
+#else
+    const bool enableValidationLayers = true;  // on in debug builds
+#endif
+
+
     // chek glfw initilizes
     if (!glfwInit()) {
         std::cerr << "Failed to init GLFW\n";
         return -1; // in c++ a non zero return value is considered an error
+    }
+
+    if (enableValidationLayers && !checkValidationLayerSupport(validationLayers)) {
+        std::cerr << "validation layers requested but not available\n";
+        return -1;
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // specifiy no OpenGL context beaucse im using Vulkan
@@ -37,7 +77,13 @@ int main() {
     createInfo.pApplicationInfo = &appInfo;
     createInfo.enabledExtensionCount = glfwExtensionCount;
     createInfo.ppEnabledExtensionNames = glfwExtensions;
-    createInfo.enabledLayerCount = 0;
+    if (enableValidationLayers) {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+        createInfo.ppEnabledLayerNames = validationLayers.data();
+    }
+    else {
+        createInfo.enabledLayerCount = 0;
+    }
 
     VkInstance instance;
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
