@@ -5,6 +5,12 @@ project ("CardMatchGame")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# dependancys
+# https://www.glfw.org/download (64-bit Windows binaries)
+# https://github.com/g-truc/glm/releases
+# https://vulkan.lunarg.com/sdk/home
+
+
 # Vulkan
 find_package(Vulkan REQUIRED)
 
