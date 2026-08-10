@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Vulkan REQUIRED)
 
 # GLFW
-set(GLFW_DIR "C:/libs/glfw-3.4.bin.WIN64")
+set(GLFW_DIR "C:/libs/glfw-3.5.1.bin.WIN64")
 add_library(glfw STATIC IMPORTED)
 set_target_properties(glfw PROPERTIES
     IMPORTED_LOCATION "${GLFW_DIR}/lib-vc2022/glfw3.lib"
