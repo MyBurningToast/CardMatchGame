@@ -130,12 +130,19 @@ int main() {
     // the special GPU features we want enabled (for now, none)
     VkPhysicalDeviceFeatures deviceFeatures{};
 
+    const std::vector<const char*> deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+
     VkDeviceCreateInfo deviceCreateInfo{};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
     deviceCreateInfo.queueCreateInfoCount = 1;
     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-    deviceCreateInfo.enabledExtensionCount = 0; // TODO: add device extentions for swapchain
+    // automaticly update the size. must cast to uint32_t beaucse .size() returns a size_t
+    // specify the count so that vulkan knows how many entries to go along from the start of the array pointer
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
     deviceCreateInfo.enabledLayerCount = 0; // TODO: add validation layers
 
     VkDevice device; // the logical device handel
@@ -146,7 +153,51 @@ int main() {
         return -1;
     }
 
+    // create the swapchain (the images we render into and present)
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities); // get info about the window
 
+    // check what pixel formats the surface supports
+    // surface format tells vulkan how the images in the swapchain should store their pixles
+    // some windows/gpus cant necessarily display every pixel format
+    uint32_t formatCount = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr); // ask how many formats exist
+    std::vector<VkSurfaceFormatKHR> formats(formatCount); // allocate enough space
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()); // fill that allocated array
+
+    // just get the first available format, good enough for now
+    VkSurfaceFormatKHR surfaceFormat = formats[0];
+
+    // how many images to put in the swapchain
+    // Im using double buffering here so that CPU can work on the next frame while the previous one is still being rendered
+    uint32_t imageCount = 2;
+    if (imageCount < capabilities.minImageCount) {
+        imageCount = capabilities.minImageCount; // if minimum is higher, set it to that minimum
+    }
+
+    VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+    swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainCreateInfo.surface = surface;
+    swapchainCreateInfo.minImageCount = imageCount;
+    swapchainCreateInfo.imageFormat = surfaceFormat.format;
+    swapchainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
+    swapchainCreateInfo.imageExtent = capabilities.currentExtent; // resolution width and height
+    swapchainCreateInfo.imageArrayLayers = 1; // each swapchain image has 1 layer
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // tells vulkan we will render color into these images
+    swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // only one queue family uses the images
+    swapchainCreateInfo.preTransform = capabilities.currentTransform; // no flip or rotation
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // fully opaque image
+    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // VSync. the vulkan spec guarantes this to be supported
+    swapchainCreateInfo.clipped = VK_TRUE; // discard pixels hidden behind other windows
+
+    VkSwapchainKHR swapchain;
+    VkResult swapchainResult = vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain);
+    if (swapchainResult != VK_SUCCESS) {
+        std::cerr << "failed to create swapchain\n";
+        return -1;
+    }
+
+    std::cout << "Swapchain created with " << imageCount << " images\n";
 
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested above
@@ -164,6 +215,7 @@ int main() {
     glfwTerminate();
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
