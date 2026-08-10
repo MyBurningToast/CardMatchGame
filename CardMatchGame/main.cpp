@@ -257,13 +257,15 @@ int main() {
     }
 
     // cleanup
-    glfwDestroyWindow(window);
-    glfwTerminate();
+
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
     return 0;
 }
