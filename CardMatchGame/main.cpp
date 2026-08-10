@@ -8,7 +8,7 @@ int main() {
     // chek glfw initilizes
     if (!glfwInit()) {
         std::cerr << "Failed to init GLFW\n";
-        return -1;
+        return -1; // in c++ a non zero return value is considered an error
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // specifiy no OpenGL context beaucse im using Vulkan
@@ -127,6 +127,19 @@ int main() {
         return -1;
     }
 
+    // to draw stuff to the screen we need a bridge between vulkan and the glfw window
+    VkSurfaceKHR surface;
+    VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automaticly based on operating system & graphics api
+    if (surfaceResult != VK_SUCCESS) {
+        std::cerr << "failed to create window surface \n";
+        return -1;
+
+    }
+
+    std::cout << "window surface created \n";
+
+
+
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested above
     VkQueue graphicsQueue;
@@ -143,6 +156,7 @@ int main() {
     glfwTerminate();
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+    vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
     return 0;
