@@ -244,9 +244,49 @@ int main() {
 
     std::cout << "Swapchain created with " << imageCount << " images\n";
 
+    // Fetch handles to the actual images the swapchain created for us
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
+    std::vector<VkImage> swapchainImages(imageCount);
+    // We only specify a minimum count and it may have created more
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data());
+
+    // create image view for each swapchain image
+    // image views descrie how to access an image. stuff like format and dimensions
+    // This is beacuse vulkan wont let you render into raw images
+    std::vector<VkImageView> swapchainImageViews(swapchainImages.size());
+    for (size_t i = 0; i < swapchainImages.size(); i++) {
+        VkImageViewCreateInfo viewCreateInfo{};
+        viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewCreateInfo.image = swapchainImages[i]; // assosiated image
+        viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // normal 2d image
+        viewCreateInfo.format = surfaceFormat.format; // must match the swapchains format
+
+        // swizzle lets you remap color chanels, im not going to do that
+        viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+        // subresourceRnage is which part of the image this view covers
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // color data not depth or stencil
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = 1; // no mip mapping, only full resolution
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = 1; // not an array texture
+
+        VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &swapchainImageViews[i]);
+        if (viewResult != VK_SUCCESS) {
+            std::cerr << " failed to create image view " << i << "\n";
+            return -1;
+        }
+
+    }
+
+    std::cout << "Created " << swapchainImageViews.size() << " image views\n";
+
 
     // get a handle to the graphics queue so we can submit commands to it
-    // queueIndex 0 is the first (and only) queue we requested above
+    // queueIndex 0 is the first (and only) queue we requested
     VkQueue graphicsQueue;
     vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
     std::cout << "device and graphics queue created\n";
@@ -260,6 +300,10 @@ int main() {
 
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+    for (auto imageView : swapchainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
