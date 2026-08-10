@@ -49,6 +49,17 @@ int main() {
     }
 
 
+    // to draw stuff to the screen we need a bridge between vulkan and the glfw window
+    VkSurfaceKHR surface;
+    VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automaticly based on operating system & graphics api
+    if (surfaceResult != VK_SUCCESS) {
+        std::cerr << "failed to create window surface \n";
+        return -1;
+
+    }
+    std::cout << "window surface created \n";
+
+
     // Pick a physical device. Somone might have multiple GPUs
     uint32_t deviceCount = 0; // Vulkan uses explicit, fixed width integer types. A normal ints size is compiler dependant
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr); // vulkan will count all the gpus that support it
@@ -62,7 +73,7 @@ int main() {
 
     // null handel is the vulkan defined null value for handles
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    uint32_t graphicsQueieFamilyIndex = 0;
+    uint32_t graphicsQueueFamilyIndex = 0;
 
     // a gpu can have multiple queue families, there are groups of commands it supports.
     // in this case we need one that supports graphics commands
@@ -72,12 +83,20 @@ int main() {
 
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
         for (uint32_t i = 0; i < queueFamilyCount; i++) {
+
             // queueFlags is a bitmask (a sinlge int repersenting differnt capabilitys)
-            // thats why we need to check with bitwise and operator insead of ==
-            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { // VK_QUEUE_GRAPHICS_BIT means it supports graphics commands
+            // thats why we need to check with bitwise & operator insead of ==
+            bool hasGraphics = queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT; // VK_QUEUE_GRAPHICS_BIT means it supports graphics commands
+
+            // Even if the gpu can do graphics commands it dosnt nesseserily mean it can present the images to our surface
+            VkBool32 presentSupport = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+            if (hasGraphics && presentSupport) {
                 physicalDevice = device;
-                graphicsQueieFamilyIndex = i; // save what index the queue family for graphics is
+                graphicsQueueFamilyIndex = i; // save what index the queue family for graphics is
                 break;
             }
         }
@@ -103,7 +122,7 @@ int main() {
     // a queue is where we submit work for the gpu to execute
     VkDeviceQueueCreateInfo queueCreateInfo{};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO; //sType tells vulkan what struct it has been given
-    queueCreateInfo.queueFamilyIndex = graphicsQueieFamilyIndex;
+    queueCreateInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
     queueCreateInfo.pQueuePriorities = &queuePriority;
     queueCreateInfo.queueCount = 1;
     queueCreateInfo.pQueuePriorities = &queuePriority;
@@ -127,23 +146,12 @@ int main() {
         return -1;
     }
 
-    // to draw stuff to the screen we need a bridge between vulkan and the glfw window
-    VkSurfaceKHR surface;
-    VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automaticly based on operating system & graphics api
-    if (surfaceResult != VK_SUCCESS) {
-        std::cerr << "failed to create window surface \n";
-        return -1;
-
-    }
-
-    std::cout << "window surface created \n";
-
 
 
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested above
     VkQueue graphicsQueue;
-    vkGetDeviceQueue(device, graphicsQueieFamilyIndex, 0, &graphicsQueue);
+    vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
     std::cout << "device and graphics queue created\n";
 
     // keep window open
