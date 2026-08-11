@@ -5,7 +5,7 @@
 #include <vector>
 #include <cstring>
 
-bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers) {
+bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayers) {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
     std::vector<VkLayerProperties> availableLayers(layerCount);
@@ -36,7 +36,7 @@ int main() {
 #ifdef NDEBUG
     const bool enableValidationLayers = false; // off in release builds
 #else
-    const bool enableValidationLayers = true;  // on in debug builds
+    const bool enableValidationLayers = true; // on in debug builds
 #endif
 
 
@@ -46,8 +46,8 @@ int main() {
         return -1; // in c++ a non zero return value is considered an error
     }
 
-    if (enableValidationLayers && !checkValidationLayerSupport(validationLayers)) {
-        std::cerr << "validation layers requested but not available\n";
+    if (enableValidationLayers && !CheckValidationLayerSupport(validationLayers)) {
+        std::cerr << "Validation layers requested but not available\n";
         return -1;
     }
 
@@ -99,18 +99,18 @@ int main() {
     VkSurfaceKHR surface;
     VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automaticly based on operating system & graphics api
     if (surfaceResult != VK_SUCCESS) {
-        std::cerr << "failed to create window surface \n";
+        std::cerr << "Failed to create window surface\n";
         return -1;
 
     }
-    std::cout << "window surface created \n";
+    std::cout << "Window surface created\n";
 
 
     // Pick a physical device. Somone might have multiple GPUs
     uint32_t deviceCount = 0; // Vulkan uses explicit, fixed width integer types. A normal ints size is compiler dependant
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr); // vulkan will count all the gpus that support it
     if (deviceCount == 0) { // couldnt find a compatable gpu
-        std::cerr << "no gpu with vulkan support/n";
+        std::cerr << "No GPU with Vulkan support\n";
         return -1;
     }
 
@@ -153,7 +153,7 @@ int main() {
     }
 
     if (physicalDevice == VK_NULL_HANDLE) {
-        std::cerr << "no GPU with graphics support found\n";
+        std::cerr << "No GPU with graphics support found\n";
         return -1;
     }
 
@@ -194,7 +194,7 @@ int main() {
     VkResult deviceResult = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device); // create a device for our physical device
 
     if (deviceResult != VK_SUCCESS) {
-        std::cerr << "failed to create logical device\n";
+        std::cerr << "Failed to create logical device\n";
         return -1;
     }
 
@@ -238,7 +238,7 @@ int main() {
     VkSwapchainKHR swapchain;
     VkResult swapchainResult = vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain);
     if (swapchainResult != VK_SUCCESS) {
-        std::cerr << "failed to create swapchain\n";
+        std::cerr << "Failed to create swapchain\n";
         return -1;
     }
 
@@ -276,7 +276,7 @@ int main() {
 
         VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &swapchainImageViews[i]);
         if (viewResult != VK_SUCCESS) {
-            std::cerr << " failed to create image view " << i << "\n";
+            std::cerr << "Failed to create image view " << i << "\n";
             return -1;
         }
 
@@ -337,11 +337,11 @@ int main() {
     VkRenderPass renderPass;
     VkResult renderPassResult = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
     if (renderPassResult != VK_SUCCESS) {
-        std::cerr << "failed to create render pass\n";
+        std::cerr << "Failed to create render pass\n";
         return -1;
     }
 
-    std::cout << "render pass created\n";
+    std::cout << "Render pass created\n";
 
 
 
@@ -350,7 +350,7 @@ int main() {
     // queueIndex 0 is the first (and only) queue we requested
     VkQueue graphicsQueue;
     vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
-    std::cout << "device and graphics queue created\n";
+    std::cout << "Device and graphics queue created\n";
 
     // keep window open
     while (!glfwWindowShouldClose(window)) {
