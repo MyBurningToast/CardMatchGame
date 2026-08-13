@@ -17,7 +17,7 @@ std::vector<char> ReadFile(const std::string& filename) {
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open file: " + filename);
     }
-    size_t fileSize = file.tellg(); // current position == size
+    size_t fileSize = (size_t)file.tellg(); // current position == size
     std::vector<char> buffer(fileSize);
 
     file.seekg(0); // back to start
@@ -26,6 +26,18 @@ std::vector<char> ReadFile(const std::string& filename) {
     return buffer;
 }
 
+VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char>& code) {
+    VkShaderModuleCreateInfo createINfo{};
+    createINfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createINfo.codeSize = code.size();
+    createINfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createINfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create shader module");
+    }
+    return shaderModule;
+}
 
 bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayers) {
     uint32_t layerCount = 0;
@@ -48,12 +60,7 @@ bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayer
 }
 
 int main() {
-    std::vector<char> vertShaderCode = ReadFile("shaders/vert.spv");
-    for (auto byte : vertShaderCode) {
-        std::cout << byte;
-    }
 
-    return 0;
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
     };
@@ -369,6 +376,151 @@ int main() {
     }
 
     std::cout << "Render pass created\n";
+
+
+
+
+
+
+
+
+
+
+
+
+    // load shaders
+
+    std::vector<char> vertShaderCode = ReadFile("shaders/vert.spv");
+    std::vector<char> fragShaderCode = ReadFile("shaders/frag.spv");
+
+    VkShaderModule vertShaderModule = CreateShaderModule(device, vertShaderCode);
+    VkShaderModule fragShaderModule = CreateShaderModule(device, fragShaderCode);
+
+    // tell Vulkan which shader stage each module is used for and its entry point
+    VkPipelineShaderStageCreateInfo vertStageInfo{};
+    vertStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertStageInfo.module = vertShaderModule;
+    vertStageInfo.pName = "main"; // the function name in the glsl file
+
+    VkPipelineShaderStageCreateInfo fragStageInfo{};
+    fragStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragStageInfo.module = fragShaderModule;
+    fragStageInfo.pName = "main";
+
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        vertStageInfo,
+        fragStageInfo
+    };
+
+
+    // vertex input describes the format of vertex data
+    // right now its hard coded in the shader for a triangle
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+    // input assembly is how vertices are grouped into shapes
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // every 3 vertices makess 1 trianlge
+    inputAssembly.primitiveRestartEnable = VK_FALSE; // disable restarting primitive strips
+    
+    VkViewport viewport{};
+    viewport.x = 0.0f; // no offset, start in top left
+    viewport.y = 0.0f;
+    viewport.width = (float)capabilities.currentExtent.width; // stretch NDC across the full width of window
+    viewport.height = (float)capabilities.currentExtent.height; // NDC is Normalized Device Coordinates so (-1 to 1)
+    viewport.minDepth = 0.0f; // write to depth buffer between 0 and 1
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{}; // anything outside the scissor gets discaarded, we want full image
+    scissor.offset = { 0, 0 }; // keep top left
+    scissor.extent = capabilities.currentExtent; // to bottom right
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+
+    // the rasterizer turns triangles into pixels
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE; // just discard anything outside near / far clip plane
+    rasterizer.rasterizerDiscardEnable = VK_FALSE; // enable/disable the entire rasterizer stage
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // fill trianlges solid (not wireframe or points)
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_NONE; // shade all trangles
+    // TODO: dont shade trangles not facing the camera
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // winding order
+    rasterizer.depthBiasEnable = VK_FALSE; // dont change depth values
+
+    // ill keep multisampling disabled for now
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Color blending is how new pixels combine with whats already there. this is used for transparency
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT; // bitmask for what color channels get written to the framebuffer for this attachment
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    // even though colorblending is disabled, its still required by vulkan
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE; // i think its only enabled for super niche blending math
+    colorBlending.attachmentCount = 1; // only write to one color attachment
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    // pipline layout is for passing extra data like uniform buffer objects
+    // TODO: create UBO struct 
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+
+    VkPipelineLayout pipelineLayout;
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        std::cerr << "Failed to create pipeline layout\n";
+        return -1;
+    }
+
+    // now combine all of this into a pipeline
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2; // only have vertex and fragment shader
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0; // 0 means the 1st/only one
+    //TODO: add depth testing
+
+
+    VkPipeline graphicsPipeline;
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+        std::cerr << "Failed to create graphics pipeline\n";
+        return -1;
+    }
+
+    // shader modules are only needed to build the pipeline
+    vkDestroyShaderModule(device, vertShaderModule, nullptr);
+    vkDestroyShaderModule(device, fragShaderModule, nullptr);
+    std::cout << "Graphics pipeline created\n";
+
+
 
 
 
