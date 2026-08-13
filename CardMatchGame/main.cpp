@@ -540,6 +540,10 @@ int main() {
 
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+
+    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
     vkDestroyRenderPass(device, renderPass, nullptr);
 
     for (auto imageView : swapchainImageViews) {
