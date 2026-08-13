@@ -4,6 +4,28 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
+#include <fstream>
+
+// reads the compiled shader from disk, copys it to ram, then will give that address to vulkan
+std::vector<char> ReadFile(const std::string& filename) {
+    
+    // input file stream
+    // ios::ate starts at the end so we know file size
+    // use binary means it will just read the raw bytes
+    // uses bitwise or to combine them into a single mask
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+    size_t fileSize = file.tellg(); // current position == size
+    std::vector<char> buffer(fileSize);
+
+    file.seekg(0); // back to start
+    file.read(buffer.data(), fileSize); // read start to end and save the bytes to a buffer in memory
+    file.close();
+    return buffer;
+}
+
 
 bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayers) {
     uint32_t layerCount = 0;
@@ -26,7 +48,12 @@ bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayer
 }
 
 int main() {
+    std::vector<char> vertShaderCode = ReadFile("shaders/vert.spv");
+    for (auto byte : vertShaderCode) {
+        std::cout << byte;
+    }
 
+    return 0;
     const std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
     };
