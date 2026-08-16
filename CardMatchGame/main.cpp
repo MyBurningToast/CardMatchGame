@@ -6,9 +6,37 @@
 #include <cstring>
 #include <fstream>
 
+const std::vector<const char*> validationLayers = {
+    "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
+};
+
+// vulkans validation layers help find errors by intercepting api calls.
+// Without it, the gpu will just crash with no error info
+#ifdef NDEBUG
+const bool enableValidationLayers = false; // off in release builds
+#else
+const bool enableValidationLayers = true; // on in debug builds
+#endif
+
+GLFWwindow* window;
+VkInstance instance;
+VkSurfaceKHR surface;
+VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+uint32_t graphicsQueueFamilyIndex = 0;
+VkDevice device;
+VkSurfaceFormatKHR surfaceFormat;
+VkSurfaceCapabilitiesKHR capabilities;
+VkSwapchainKHR swapchain;
+std::vector<VkImage> swapchainImages;
+std::vector<VkImageView> swapchainImageViews;
+VkRenderPass renderPass;
+VkPipelineLayout pipelineLayout;
+VkPipeline graphicsPipeline;
+VkQueue graphicsQueue;
+
 // reads the compiled shader from disk, copys it to ram, then will give that address to vulkan
 std::vector<char> ReadFile(const std::string& filename) {
-    
+
     // input file stream
     // ios::ate starts at the end so we know file size
     // use binary means it will just read the raw bytes
@@ -59,21 +87,7 @@ bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayer
     return true;
 }
 
-int main() {
-
-    const std::vector<const char*> validationLayers = {
-        "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
-    };
-
-    // vulkans validation layers help find errors by intercepting api calls.
-    // Without it, the gpu will just crash with no error info
-#ifdef NDEBUG
-    const bool enableValidationLayers = false; // off in release builds
-#else
-    const bool enableValidationLayers = true; // on in debug builds
-#endif
-
-
+int InitWindow() {
     // chek glfw initilizes
     if (!glfwInit()) {
         std::cerr << "Failed to init GLFW\n";
@@ -86,13 +100,17 @@ int main() {
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // specifiy no OpenGL context beaucse im using Vulkan
-    GLFWwindow* window = glfwCreateWindow(640, 480, "Test", nullptr, nullptr);
+    window = glfwCreateWindow(640, 480, "Test", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
         return -1;
     }
 
+    return 0;
+}
+
+int CreateInstance() {
     // Vulkn check
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -119,7 +137,6 @@ int main() {
         createInfo.enabledLayerCount = 0;
     }
 
-    VkInstance instance;
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to create Vulkan instance " << result << "\n";
@@ -128,9 +145,11 @@ int main() {
         return -1;
     }
 
+    return 0;
+}
 
+int CreateSurface() {
     // to draw stuff to the screen we need a bridge between vulkan and the glfw window
-    VkSurfaceKHR surface;
     VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automaticly based on operating system & graphics api
     if (surfaceResult != VK_SUCCESS) {
         std::cerr << "Failed to create window surface\n";
@@ -139,7 +158,10 @@ int main() {
     }
     std::cout << "Window surface created\n";
 
+    return 0;
+}
 
+int PickPhysicalDevice() {
     // Pick a physical device. Somone might have multiple GPUs
     uint32_t deviceCount = 0; // Vulkan uses explicit, fixed width integer types. A normal ints size is compiler dependant
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr); // vulkan will count all the gpus that support it
@@ -152,8 +174,8 @@ int main() {
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()); // .data beacuse vulkan expects c style pointers
 
     // null handel is the vulkan defined null value for handles
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    uint32_t graphicsQueueFamilyIndex = 0;
+    physicalDevice = VK_NULL_HANDLE;
+    graphicsQueueFamilyIndex = 0;
 
     // a gpu can have multiple queue families, there are groups of commands it supports.
     // in this case we need one that supports graphics commands
@@ -195,6 +217,10 @@ int main() {
     vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
     std::cout << "Using GPU: " << deviceProps.deviceName << "\n";
 
+    return 0;
+}
+
+int CreateLogicalDevice() {
     // create logical device. the logical device is the interface to the gpu
     // vulkan needs to know how many queues we want from the graphics queue faimily and what priority 0-1
     float queuePriority = 1.0f;
@@ -224,7 +250,6 @@ int main() {
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    VkDevice device; // the logical device handel
     VkResult deviceResult = vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device); // create a device for our physical device
 
     if (deviceResult != VK_SUCCESS) {
@@ -232,8 +257,11 @@ int main() {
         return -1;
     }
 
+    return 0;
+}
+
+int CreateSwapchain() {
     // create the swapchain (the images we render into and present)
-    VkSurfaceCapabilitiesKHR capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities); // get info about the window
 
     // check what pixel formats the surface supports
@@ -245,7 +273,7 @@ int main() {
     vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()); // fill that allocated array
 
     // just get the first available format, good enough for now
-    VkSurfaceFormatKHR surfaceFormat = formats[0];
+    surfaceFormat = formats[0];
 
     // how many images to put in the swapchain
     // Im using double buffering here so that CPU can work on the next frame while the previous one is still being rendered
@@ -269,7 +297,6 @@ int main() {
     swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // VSync. the vulkan spec guarantes this to be supported
     swapchainCreateInfo.clipped = VK_TRUE; // discard pixels hidden behind other windows
 
-    VkSwapchainKHR swapchain;
     VkResult swapchainResult = vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain);
     if (swapchainResult != VK_SUCCESS) {
         std::cerr << "Failed to create swapchain\n";
@@ -280,14 +307,18 @@ int main() {
 
     // Fetch handles to the actual images the swapchain created for us
     vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
-    std::vector<VkImage> swapchainImages(imageCount);
+    swapchainImages.resize(imageCount);
     // We only specify a minimum count and it may have created more
     vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data());
 
+    return 0;
+}
+
+int CreateImageViews() {
     // create image view for each swapchain image
     // image views descrie how to access an image. stuff like format and dimensions
     // This is beacuse vulkan wont let you render into raw images
-    std::vector<VkImageView> swapchainImageViews(swapchainImages.size());
+    swapchainImageViews.resize(swapchainImages.size());
     for (size_t i = 0; i < swapchainImages.size(); i++) {
         VkImageViewCreateInfo viewCreateInfo{};
         viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -318,8 +349,10 @@ int main() {
 
     std::cout << "Created " << swapchainImageViews.size() << " image views\n";
 
+    return 0;
+}
 
-
+int CreateRenderPass() {
     // create the render pass
     // a render pass describes what happens to the images during a frame
 
@@ -335,7 +368,7 @@ int main() {
 
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // done care about previous images layout
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // must be ready to present to the screen when done
-    
+
     // a render pass is made of one or more subpasses
     // but we only need a sinlge subpass that writes color to our only attachment
 
@@ -368,7 +401,6 @@ int main() {
     renderPassCreateInfo.dependencyCount = 1;
     renderPassCreateInfo.pDependencies = &dependency;
 
-    VkRenderPass renderPass;
     VkResult renderPassResult = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
     if (renderPassResult != VK_SUCCESS) {
         std::cerr << "Failed to create render pass\n";
@@ -377,17 +409,10 @@ int main() {
 
     std::cout << "Render pass created\n";
 
+    return 0;
+}
 
-
-
-
-
-
-
-
-
-
-
+int CreateGraphicsPipeline() {
     // load shaders
 
     std::vector<char> vertShaderCode = ReadFile("shaders/vert.spv");
@@ -428,7 +453,7 @@ int main() {
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // every 3 vertices makess 1 trianlge
     inputAssembly.primitiveRestartEnable = VK_FALSE; // disable restarting primitive strips
-    
+
     VkViewport viewport{};
     viewport.x = 0.0f; // no offset, start in top left
     viewport.y = 0.0f;
@@ -486,7 +511,6 @@ int main() {
     pipelineLayoutInfo.setLayoutCount = 0;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
-    VkPipelineLayout pipelineLayout;
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         std::cerr << "Failed to create pipeline layout\n";
         return -1;
@@ -509,7 +533,6 @@ int main() {
     //TODO: add depth testing
 
 
-    VkPipeline graphicsPipeline;
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
         std::cerr << "Failed to create graphics pipeline\n";
         return -1;
@@ -520,22 +543,24 @@ int main() {
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
     std::cout << "Graphics pipeline created\n";
 
+    return 0;
+}
 
-
-
-
-
+void GetGraphicsQueue() {
     // get a handle to the graphics queue so we can submit commands to it
     // queueIndex 0 is the first (and only) queue we requested
-    VkQueue graphicsQueue;
     vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
     std::cout << "Device and graphics queue created\n";
+}
 
+void MainLoop() {
     // keep window open
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
+}
 
+void Cleanup() {
     // cleanup
 
     // we need to destroy the vulkan stuff in the reverse order they were created
@@ -557,5 +582,23 @@ int main() {
 
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+int main() {
+    // if any of these return a non zero vlaue, there was an error
+    if (InitWindow() != 0) return -1;
+    if (CreateInstance() != 0) return -1;
+    if (CreateSurface() != 0) return -1;
+    if (PickPhysicalDevice() != 0) return -1;
+    if (CreateLogicalDevice() != 0) return -1;
+    if (CreateSwapchain() != 0) return -1;
+    if (CreateImageViews() != 0) return -1;
+    if (CreateRenderPass() != 0) return -1;
+    if (CreateGraphicsPipeline() != 0) return -1;
+    GetGraphicsQueue();
+
+    MainLoop();
+
+    Cleanup();
     return 0;
 }
