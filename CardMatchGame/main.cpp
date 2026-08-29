@@ -34,6 +34,13 @@ VkPipelineLayout pipelineLayout;
 VkPipeline graphicsPipeline;
 VkQueue graphicsQueue;
 
+std::vector<VkFramebuffer> swapchainFramebuffers;
+VkCommandPool commandPool;
+VkCommandBuffer commandBuffer;
+VkSemaphore imageAvailableSemaphore;
+VkSemaphore renderFinishedSemaphore;
+VkFence inFlightFence;
+
 // reads the compiled shader from disk, copys it to ram, then will give that address to vulkan
 std::vector<char> ReadFile(const std::string& filename) {
 
@@ -553,18 +560,21 @@ void GetGraphicsQueue() {
     std::cout << "Device and graphics queue created\n";
 }
 
-void MainLoop() {
-    // keep window open
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-    }
-}
-
 void Cleanup() {
     // cleanup
 
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
+
+    vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+    vkDestroyFence(device, inFlightFence, nullptr);
+
+    vkDestroyCommandPool(device, commandPool, nullptr); // also frees the command buffer allocated from it
+
+    for (auto framebuffer : swapchainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
 
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -584,6 +594,208 @@ void Cleanup() {
     glfwTerminate();
 }
 
+int CreateFramebuffers() {
+    // a framebuffer links the render pass to the actual images to render into
+    // there is one per swapchain image view
+    swapchainFramebuffers.resize(swapchainImageViews.size());
+    for (size_t i = 0; i < swapchainImageViews.size(); i++) {
+        VkImageView attachments[] = {
+            swapchainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = renderPass; // render pass this frame buffer will use. must match layout and be compatable
+        framebufferInfo.attachmentCount = 1; // must match attachment count declared in the render pass
+        framebufferInfo.pAttachments = attachments; // pointer to array of VkImageView handels. One per attachment slot defined in the render pass
+        framebufferInfo.width = capabilities.currentExtent.width;
+        framebufferInfo.height = capabilities.currentExtent.height;
+        framebufferInfo.layers = 1; // only need a single 2d render target
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapchainFramebuffers[i]) != VK_SUCCESS) {
+            std::cerr << "Failed to create framebuffer " << i << "\n";
+            return -1;
+        }
+    }
+
+    std::cout << "Created " << swapchainFramebuffers.size() << " framebuffers\n";
+    return 0;
+}
+
+
+int CreateCommandBuffer() {
+    // allocate a single command buffer from the pool
+    // it gets re recorded every frame
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // can be submitted directly to a queue
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+        std::cerr << "Failed to allocate command buffer\n";
+        return -1;
+    }
+
+    std::cout << "Command buffer allocated\n";
+    return 0;
+}
+
+
+
+
+int CreateCommandPool() {
+    // command buffers are allocated from a command pool
+    // the pool is tied to a specific queue family - ours is the graphics family
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // allow re-recording buffers individually
+    poolInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
+
+    if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+        std::cerr << "Failed to create command pool\n";
+        return -1;
+    }
+
+    std::cout << "Command pool created\n";
+    return 0;
+}
+
+
+
+// needed to coordinate work between cpu and gpu beacsue they run in parrellel and at very different speeds
+int CreateSyncObjects() {
+    // semaphores sync gpu to gpu work (wait until image is available before drawing)
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    // fences sync gpu to cpu work (cpu wait until the gpu is done for this frame)
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    // signaled and unsignaled means done or not
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled so the first frame doesn't wait forever
+
+    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS
+        || vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS||
+        vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
+
+        std::cerr << "Failed to create sync objects\n";
+        return -1;
+    }
+
+    std::cout << "Sync objects created\n";
+    return 0;
+}
+
+
+// records the draw commands into the command buffer, targeting a specific framebuffer
+void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex) {
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    // puts the command buffer into recording state
+    // now can do vkCmd* fucntions on it
+    vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+
+    // what value to reset an attachment to at the start of a render pass
+    // when the attachments loadOp is VK_ATTACHMENT_LOAD_OP_CLEAR
+    VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} }; // clear to black
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = { 0, 0 }; // start at top left corner of frame buffer
+    renderPassInfo.renderArea.extent = capabilities.currentExtent; // match width and height (full spawchain size)
+    // TODO add depth attachment
+    renderPassInfo.clearValueCount = 1; // right now only sinlge color attachment
+    renderPassInfo.pClearValues = &clearColor; // default starting color
+
+    // start render pass
+    // VK_SUBPASS_CONTENTS_INLINE means to record comands for this subpass directly here instead of secondard command buffer
+    vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // binds the previously creaAted graphics pipline (vertex/frag shaders, rasterizer, blend state, viewport ect) as the active pipline for the following draw calls
+    // need VK_PIPELINE_BIND_POINT_GRAPHICS cos this isnt a compute shader
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+    // draw 3 vertices, 1 instance, starting at vertex 0 / instance 0
+    // the triangle is hardcoded in the vertex shader, so no vertex buffer needed yet
+    // TODO Add vertex buffer
+    vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(cmdBuffer); // finishes subpass 0 tehn does automatic layout transiton to finalLayout (COLOR_ATTACHMENT_OPTIMAL to PRESENT_SRC_KHR)
+    vkEndCommandBuffer(cmdBuffer); // stop recording
+
+    /*
+    if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to record command buffer");
+    }
+    */
+}
+
+
+void DrawFrame() {
+    // will block the main thread until vkWaitForFence returns
+    // VK_TRUE means wait until ALL are signaled
+    // UINT64_MAX is timeout in nanosceonds. in this case we are waiting 600 years :)
+    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &inFlightFence);
+
+    // grab the next available image from the swapchain
+    // so we know which framebuffer (swapchainFramebuffers[imageIndex]) is safe to draw into
+    uint32_t imageIndex;
+    // 
+    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+    // reset command buffer to initial state so it can be re-recorded
+    vkResetCommandBuffer(commandBuffer, 0);
+    RecordCommandBuffer(commandBuffer, imageIndex); // record the next frame
+
+    // tells the gpu to not start executing this submission until imageAvailableSemaphore is signaled
+    VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // wait when it reaches color output stage. can overlap vertex work with waiting for image
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphore }; // what semaphore to signal wwhen all commands in this specific submission finish execution
+
+
+    // submits the work to the gpu queue
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1; 
+    submitInfo.pWaitSemaphores = waitSemaphores;// presentation waits on this before displaying
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores; // signal when drawing is done
+
+    // sumbit the work to the GPu queue
+    vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence);
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores; // wait for drawing to finish before presenting
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &swapchain; // present this swapchin
+    presentInfo.pImageIndices = &imageIndex; // the aquired image
+
+    // request the presentation engine to display this image
+    vkQueuePresentKHR(graphicsQueue, &presentInfo);
+}
+
+void MainLoop() {
+    // keep window open
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        DrawFrame();
+    }
+
+    // wait for the gpu to finish everything before we start destroying stuff in cleanup
+    vkDeviceWaitIdle(device);
+}
+
+
 int main() {
     // if any of these return a non zero vlaue, there was an error
     if (InitWindow() != 0) return -1;
@@ -596,9 +808,16 @@ int main() {
     if (CreateRenderPass() != 0) return -1;
     if (CreateGraphicsPipeline() != 0) return -1;
     GetGraphicsQueue();
+    if (CreateFramebuffers() != 0) return -1;
+    if (CreateCommandPool() != 0) return -1;
+    if (CreateCommandBuffer() != 0) return -1;
+    if (CreateSyncObjects() != 0) return -1;
 
     MainLoop();
 
     Cleanup();
     return 0;
 }
+
+
+
