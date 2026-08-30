@@ -29,3 +29,6 @@ cmake -B build
 cmake --build build
 ```
 (or just press F5)
+
+## Current Progress
+Right now there is only a multi color triangle
