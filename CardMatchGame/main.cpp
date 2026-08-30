@@ -38,7 +38,7 @@ std::vector<VkFramebuffer> swapchainFramebuffers;
 VkCommandPool commandPool;
 VkCommandBuffer commandBuffer;
 VkSemaphore imageAvailableSemaphore;
-VkSemaphore renderFinishedSemaphore;
+std::vector<VkSemaphore> renderFinishedSemaphores;
 VkFence inFlightFence;
 
 // reads the compiled shader from disk, copys it to ram, then will give that address to vulkan
@@ -567,8 +567,11 @@ void Cleanup() {
     // this is beacuse they depend on each other
 
     vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
-    vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
     vkDestroyFence(device, inFlightFence, nullptr);
+
+    for (auto semaphore : renderFinishedSemaphores) {
+        vkDestroySemaphore(device, semaphore, nullptr);
+    }
 
     vkDestroyCommandPool(device, commandPool, nullptr); // also frees the command buffer allocated from it
 
@@ -675,12 +678,20 @@ int CreateSyncObjects() {
     // signaled and unsignaled means done or not
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled so the first frame doesn't wait forever
 
-    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS
-        || vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS||
+    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
         vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
-
         std::cerr << "Failed to create sync objects\n";
         return -1;
+    }
+
+    // one semaphore per swapchain image to say when render is finsihed
+    // cos each image might be presented in a different order than it was submitted
+    renderFinishedSemaphores.resize(swapchainImages.size());
+    for (size_t i = 0; i < renderFinishedSemaphores.size(); i++) {
+        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS) {
+            std::cerr << "Failed to create render finished semaphore " << i << "\n";
+            return -1;
+        }
     }
 
     std::cout << "Sync objects created\n";
@@ -755,7 +766,7 @@ void DrawFrame() {
     // tells the gpu to not start executing this submission until imageAvailableSemaphore is signaled
     VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // wait when it reaches color output stage. can overlap vertex work with waiting for image
-    VkSemaphore signalSemaphores[] = { renderFinishedSemaphore }; // what semaphore to signal wwhen all commands in this specific submission finish execution
+    VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[imageIndex] }; // what semaphore to signal wwhen all commands in this specific submission finish execution. use the one tied to THIS iamge
 
 
     // submits the work to the gpu queue
