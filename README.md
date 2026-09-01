@@ -13,22 +13,5 @@
 - Unzip GLM to `C:\libs\glm`
 - If using different folders, change the `GLFW_DIR` and `GLM_DIR` paths in `CMakeLists.txt`
 
-**Folder structure**
-```
-CardMatchGame/
-|-- CMakeLists.txt
-|-- main.cpp
-|-- shaders/
-    |-- triangle.vert
-    |-- triangle.frag
-```
-
-**Build**
-```
-cmake -B build
-cmake --build build
-```
-(or just press F5)
-
 ## Current Progress
 Right now there is only a multi color triangle
