@@ -41,6 +41,33 @@ VkSemaphore imageAvailableSemaphore;
 std::vector<VkSemaphore> renderFinishedSemaphores;
 VkFence inFlightFence;
 
+VkBuffer vertexBuffer;
+VkDeviceMemory vertexBufferMemory;
+VkBuffer indexBuffer;
+VkDeviceMemory indexBufferMemory;
+
+// This is the data for a single vertex. For now only stores position
+// TODO: store color data in vertex
+struct Vertex {
+    glm::vec2 pos;
+};
+
+// in Vulkans NDC/screen space, positive Y points downward
+const std::vector<Vertex> vertices = {
+    {{-0.5f, -0.5f}}, // top left
+    {{ 0.5f, -0.5f}}, // top right
+    {{ 0.5f,  0.5f}}, // bottom right
+    {{-0.5f,  0.5f}}, // bottom left
+};
+
+// index buffer data
+const std::vector<uint16_t> indices = {
+    0, 1, 2,
+    2, 3, 0
+};
+
+
+
 // reads the compiled shader from disk, copys it to ram, then will give that address to vulkan
 std::vector<char> ReadFile(const std::string& filename) {
 
@@ -625,7 +652,6 @@ int CreateFramebuffers() {
     return 0;
 }
 
-
 int CreateCommandBuffer() {
     // allocate a single command buffer from the pool
     // it gets re recorded every frame
@@ -644,9 +670,6 @@ int CreateCommandBuffer() {
     return 0;
 }
 
-
-
-
 int CreateCommandPool() {
     // command buffers are allocated from a command pool
     // the pool is tied to a specific queue family - ours is the graphics family
@@ -663,8 +686,6 @@ int CreateCommandPool() {
     std::cout << "Command pool created\n";
     return 0;
 }
-
-
 
 // needed to coordinate work between cpu and gpu beacsue they run in parrellel and at very different speeds
 int CreateSyncObjects() {
@@ -697,7 +718,6 @@ int CreateSyncObjects() {
     std::cout << "Sync objects created\n";
     return 0;
 }
-
 
 // records the draw commands into the command buffer, targeting a specific framebuffer
 void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex) {
@@ -745,6 +765,110 @@ void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex) {
     */
 }
 
+uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    // ask the gpu what memory types it has and their properties
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        // typeFilter is a bitmask of memory types the buffer can use
+        // we also need the memory type to have all the properties we asked for (like HOST_VISABLE)
+        bool typeAllowed = typeFilter & (1 << i);
+        bool hasProperties = (memProperties.memoryTypes[i].propertyFlags * properties) == properties;
+
+        if (typeAllowed && hasProperties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find suitable memry type");
+}
+
+void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+    /*
+    Note for myself:
+    allocating and uploading data to a gpu buffer
+
+    1. create buffer
+    define its size (in bytes) and its useage (vertex buffer, index buffer or uniform buffer)
+    Nothing has been alocated yet
+
+    2. find memory type
+    gpus have differnt types of memory heaps (vram or system ram accesiable by the gpu)
+    it must meet buffer requirments the memory must support the specific buffer usage created
+    and property flags, choose whether the memory needs to be host visable (cpu can write directly) or device local (fast but gpu only)
+
+    3. allocate
+    request a chunck of physical memory from the gpus memory mannager\
+
+    4. bind
+    connect the logical buffer object to physical gpu memoy
+    assocates the virtual hande;l the code uses to hardware addresses on the gpu
+
+    5. copy data
+    move the raw data (might be 3d mesh verties or textures) form cpu ram into the allocated gpu memory.
+    direct mapping (staging / host visable) - map the gpu memory to a cpu pointer and use memcpy to copy data directly
+    staging buffer transfer (device local) - copy data to a temporary staging buffer first then give a command to the gpu to copy it internally from staging into fast device local buffer
+    */
+
+    // descripbe and create buffer
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage; // eg vertex byffer / index buffer
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // only accessed by one queue family at a time
+
+    if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create buffer");
+    }
+
+    // ask what memory requreiments this specific buffer has
+    VkMemoryRequirements memRequirments;
+    vkGetBufferMemoryRequirements(device, buffer, &memRequirments);
+
+    // allocate memory of the right type and size
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirments.size;
+    allocInfo.memoryTypeIndex = FindMemoryType(memRequirments.memoryTypeBits, properties);
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate buffer memory");
+    }
+
+    // bind the memory to the buffer
+    // offset 0 means use it from the start
+    vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
+
+void CreateVertexBuffer() {
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    // VK_BUFFER_USAGE_VERTEX_BUFFER_BIT - this buffer will hold vertex data used in draw calls
+    // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT - cpu can map this memory and write to it directly
+    // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT - cpu writes are automatically visible to the GPU, no manual flush needed
+    CreateBuffer(bufferSize,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexBuffer, vertexBufferMemory);
+
+    void* data;
+    vkMapMemory(device, vertexBufferMemory, 0, bufferSize, 0, &data); // get a cpu pointer to the gpu memory
+    memcpy(data, vertices.data(), (size_t)bufferSize); // standard c++ fucntion
+    vkUnmapMemory(device, vertexBufferMemory); // must unmap when done with cpu access
+
+    std::cout << "Vertex buffer created\n";
+}
+
+void CreateIndexBuffer() { // basicly the same as for the vertex buffer
+    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    CreateBuffer(bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, indexBuffer, indexBufferMemory);
+
+    void* data;
+    vkMapMemory(device, indexBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, indices.data(), (size_t)bufferSize);
+    vkUnmapMemory(device, indexBufferMemory);
+
+    std::cout << "Index buffer created\n";
+}
 
 void DrawFrame() {
     // will block the main thread until vkWaitForFence returns
@@ -806,7 +930,6 @@ void MainLoop() {
     vkDeviceWaitIdle(device);
 }
 
-
 int main() {
     // if any of these return a non zero vlaue, there was an error
     if (InitWindow() != 0) return -1;
@@ -829,6 +952,4 @@ int main() {
     Cleanup();
     return 0;
 }
-
-
 
