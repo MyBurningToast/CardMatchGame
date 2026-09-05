@@ -474,13 +474,25 @@ int CreateGraphicsPipeline() {
         fragStageInfo
     };
 
+    // interpet vertex structs raw bytes as shader input
+    VkVertexInputBindingDescription bindingDescription{};
+    bindingDescription.binding = 0; // this buffers slot in the command state. there migh be another buffer for color. TODO: add color binding
+    bindingDescription.stride = sizeof(Vertex); // how many bytes to skip to get to the next in the buffer
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // go to next vertex's data for ever vertex processed
 
-    // vertex input describes the format of vertex data
-    // right now its hard coded in the shader for a triangle
+    VkVertexInputAttributeDescription attributeDescription{};
+    attributeDescription.binding = 0; // which binding (vertex buffer stream) this attribute's data comes from. matches the binding description
+    attributeDescription.location = 0; // matches location = 0 in the vertex shader. TODO: add another attribute for colour
+    attributeDescription.format = VK_FORMAT_R32G32_SFLOAT; // vec2 of floats
+    attributeDescription.offset = offsetof(Vertex, pos); // byte offset of the pos field within the vertex struct
+
+    // combine binding and attribute descipritons and attachs them to the pipline
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = 1;
+    vertexInputInfo.pVertexAttributeDescriptions = &attributeDescription;
 
     // input assembly is how vertices are grouped into shapes
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -617,6 +629,12 @@ void Cleanup() {
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
+
+    vkDestroyBuffer(device, indexBuffer, nullptr);
+    vkFreeMemory(device, indexBufferMemory, nullptr);
+    vkDestroyBuffer(device, vertexBuffer, nullptr);
+    vkFreeMemory(device, vertexBufferMemory, nullptr);
+
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
 
@@ -750,10 +768,12 @@ void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex) {
     // need VK_PIPELINE_BIND_POINT_GRAPHICS cos this isnt a compute shader
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    // draw 3 vertices, 1 instance, starting at vertex 0 / instance 0
-    // the triangle is hardcoded in the vertex shader, so no vertex buffer needed yet
-    // TODO Add vertex buffer
-    vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
+    VkBuffer vertexBuffers[] = { vertexBuffer };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(cmdBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+    vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(cmdBuffer); // finishes subpass 0 tehn does automatic layout transiton to finalLayout (COLOR_ATTACHMENT_OPTIMAL to PRESENT_SRC_KHR)
     vkEndCommandBuffer(cmdBuffer); // stop recording
@@ -774,7 +794,7 @@ uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         // typeFilter is a bitmask of memory types the buffer can use
         // we also need the memory type to have all the properties we asked for (like HOST_VISABLE)
         bool typeAllowed = typeFilter & (1 << i);
-        bool hasProperties = (memProperties.memoryTypes[i].propertyFlags * properties) == properties;
+        bool hasProperties = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
 
         if (typeAllowed && hasProperties) {
             return i;
@@ -946,6 +966,8 @@ int main() {
     if (CreateCommandPool() != 0) return -1;
     if (CreateCommandBuffer() != 0) return -1;
     if (CreateSyncObjects() != 0) return -1;
+    CreateVertexBuffer();
+    CreateIndexBuffer();
 
     MainLoop();
 
