@@ -6,6 +6,8 @@
 #include <cstring>
 #include <fstream>
 
+void CleanupSwapchain();
+
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
 };
@@ -600,44 +602,35 @@ void GetGraphicsQueue() {
 }
 
 void Cleanup() {
-    // cleanup
-
     // we need to destroy the vulkan stuff in the reverse order they were created
     // this is beacuse they depend on each other
-
     vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
     vkDestroyFence(device, inFlightFence, nullptr);
-
     for (auto semaphore : renderFinishedSemaphores) {
         vkDestroySemaphore(device, semaphore, nullptr);
     }
-
     vkDestroyCommandPool(device, commandPool, nullptr); // also frees the command buffer allocated from it
-
-    for (auto framebuffer : swapchainFramebuffers) {
-        vkDestroyFramebuffer(device, framebuffer, nullptr);
-    }
-
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-
-    vkDestroyRenderPass(device, renderPass, nullptr);
-
-    for (auto imageView : swapchainImageViews) {
-        vkDestroyImageView(device, imageView, nullptr);
-    }
-
-    vkDestroySwapchainKHR(device, swapchain, nullptr);
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-
     vkDestroyBuffer(device, indexBuffer, nullptr);
     vkFreeMemory(device, indexBufferMemory, nullptr);
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
-
+    /*
+    for (auto framebuffer : swapchainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+    */
+    vkDestroyPipeline(device, graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyRenderPass(device, renderPass, nullptr);
+    /*
+    for (auto imageView : swapchainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+    */
+    CleanupSwapchain();
+    vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
-
     glfwDestroyWindow(window);
     glfwTerminate();
 }
@@ -890,18 +883,60 @@ void CreateIndexBuffer() { // basicly the same as for the vertex buffer
     std::cout << "Index buffer created\n";
 }
 
+void CleanupSwapchain() {
+    // destroy everything that depends on the swapchain/window size
+    for (auto framebuffer : swapchainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+    for (auto imageView : swapchainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+}
+
+void RecreateSwapchain() {
+    // handle minimization, the windoww size becomes 0x0 and Vulkan dosnt allow a 0x0 swapchain
+    // so just wait until the window has a real size again
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents(); // sleep until something happens
+    }
+
+    // wait for the gpu to finish using the old swapchain before destroying it
+    vkDeviceWaitIdle(device);
+
+    CleanupSwapchain();
+
+    // fetch capabilities again since the window size (and possibly other properties) changed
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
+
+    CreateSwapchain();
+    CreateImageViews();
+    CreateFramebuffers();
+}
+
+
 void DrawFrame() {
     // will block the main thread until vkWaitForFence returns
     // VK_TRUE means wait until ALL are signaled
     // UINT64_MAX is timeout in nanosceonds. in this case we are waiting 600 years :)
     vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &inFlightFence);
 
     // grab the next available image from the swapchain
     // so we know which framebuffer (swapchainFramebuffers[imageIndex]) is safe to draw into
     uint32_t imageIndex;
-    // 
-    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult acquireResult = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
+        // swapchain no longer matches the surface
+        // so rebuild it and skip this frame
+        RecreateSwapchain();
+        return;
+    }
+
+    vkResetFences(device, 1, &inFlightFence); // change back to unsignaled state
 
     // reset command buffer to initial state so it can be re-recorded
     vkResetCommandBuffer(commandBuffer, 0);
@@ -936,7 +971,13 @@ void DrawFrame() {
     presentInfo.pImageIndices = &imageIndex; // the aquired image
 
     // request the presentation engine to display this image
-    vkQueuePresentKHR(graphicsQueue, &presentInfo);
+    VkResult presentResult = vkQueuePresentKHR(graphicsQueue, &presentInfo);
+
+    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
+        // suboptimal means it still worked but isn't ideal (size mismatch)
+        // rebuild for next frame
+        RecreateSwapchain();
+    }
 }
 
 void MainLoop() {
