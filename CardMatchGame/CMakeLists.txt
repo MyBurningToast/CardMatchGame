@@ -5,17 +5,13 @@ project ("CardMatchGame")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# dependancys
-# https://www.glfw.org/download (64-bit Windows binaries)
-# https://github.com/g-truc/glm/releases
-# https://vulkan.lunarg.com/sdk/home
-
+# TODO: Automaticly fetch and compile the required headers for all dependacys
 
 # Vulkan
 find_package(Vulkan REQUIRED)
 
 # GLFW
-set(GLFW_DIR "C:/libs/glfw-3.5.1.bin.WIN64")
+set(GLFW_DIR "C:/libs/glfw-3.5.1.bin.WIN64") # CHANGE THIS TO YOUR CORRECT PATH
 add_library(glfw STATIC IMPORTED)
 set_target_properties(glfw PROPERTIES
     IMPORTED_LOCATION "${GLFW_DIR}/lib-vc2022/glfw3.lib"
@@ -23,7 +19,7 @@ set_target_properties(glfw PROPERTIES
 )
 
 # GLM Header
-set(GLM_DIR "C:/libs/glm")
+set(GLM_DIR "C:/libs/glm") # CHANGE THIS TO YOUR CORRECT PATH
 
 add_executable (CardMatchGame "main.cpp" )
 
@@ -41,10 +37,7 @@ target_link_libraries(CardMatchGame PRIVATE
 # Compile shaders
 # Vulkan cant read shader source code directly. it needs to be pre compiled bytecode called SPIR-V
 # Vulkan SDK has an in built tool for this
-
-# btw i basicly copy pasted this from somones github so dont ask me about the syntax for this lol
 find_program(GLSLC glslc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
-message(STATUS "GLSLC found at: ${GLSLC}")
 
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/shaders/vert.spv
