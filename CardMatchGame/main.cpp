@@ -1,10 +1,13 @@
 ﻿#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <iostream>
 #include <vector>
 #include <cstring>
 #include <fstream>
+#include <chrono>
 
 void CleanupSwapchain();
 
@@ -48,13 +51,72 @@ VkDeviceMemory vertexBufferMemory;
 VkBuffer indexBuffer;
 VkDeviceMemory indexBufferMemory;
 
+VkBuffer uniformBuffer;
+VkDeviceMemory uniformBufferMemory;
+void* uniformBufferMapped; // kept mapped permanently and write to it every frame
+
+VkDescriptorSetLayout descriptorSetLayout;
+VkDescriptorPool descriptorPool;
+VkDescriptorSet descriptorSet;
+
 // This is the data for a single vertex. For now only stores position
 // TODO: store color data in vertex
 struct Vertex {
     glm::vec2 pos;
 };
 
-// in Vulkans NDC/screen space, positive Y points downward
+/*
+Note for myself:
+uniform buffers and MVP (model view projection)
+
+A ubo is data that is the same for every vertex/fragment in a draw call
+used for stuff like model/view/projection, light position or a time vlaue
+things the draw call need "uniformaly" or glbal
+
+the MVP idea
+model matrix - moves/rotates/scales the mesh from its own local space into world space
+view matrix - moves the world so it lines up with where the camera is looking (inverse of camera's transfom?)
+projection matrix - convert 3d spac einto the clip space range vulkan expects also handfles fov/aspect/persepctive
+final vertex pos - prjection * view * modle * vertexPos (done in vertex shader)
+mutlipling all 3 togther on the cpu before upload as one matrix saves the shader from doing 3 matrix mutiplicatons per vertex
+
+
+how to use ubo:
+
+define the struct (cpu side)
+matche the layout the shader expects liek glm::mat4 model; (or model/view/proj all three)
+make sure it follows alignment rules (std140). some types need padding (im pretty sure glm has alignas helpers for this, need to check)
+
+create the bufer
+same as CreateBuffer() flow but usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT instead of vertex or index
+memory props HOST_VISIBLE | HOST_COHERENT cos gets rewritten every frame anyways
+
+persistent map (differnt from vertex buffer)
+since this changes every frame, map once at creation and keep the pointer and memcpy new matrix data into it each frame without mpa and unmap (pretty sure that has overhead)
+
+descriptor set layout
+tell the pipeline to expect a uniform buffer at binding X - VkDescriptorSetLayout
+done only  at pipeline creation time
+
+descriptor pool + descriptor set
+pool - where descriptors get allocated from (like command pool???)
+descriptor set - the actual object that points a specific binding number to a specific VkBuffer
+
+shader side
+layout(binding = 0) uniform UniformBufferObject { mat4 model; mat4 view; mat4 proj; } ubo;
+binding here is a different numbering system than location (vertex attributes) - read more about this
+
+bind before drawing
+vkCmdBindDescriptorSets(...) before vkCmdDraw/vkCmdDrawIndexed
+tells the gpu which descriptor set (and therefore which buffer) to use for this draw call
+*/
+
+// read only memory buffer used to pass global data
+struct UniformBufferObject {
+    glm::mat4 model; // 16 floats
+};
+
+// in Vulkans NDC(Normalized Device Coordinates)/screen space, positive Y points downward
 const std::vector<Vertex> vertices = {
     {{-0.5f, -0.5f}}, // top left
     {{ 0.5f, -0.5f}}, // top right
@@ -67,6 +129,32 @@ const std::vector<uint16_t> indices = {
     0, 1, 2,
     2, 3, 0
 };
+
+
+int CreateDescriptorSetLayout() {
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0; // matches layout(binding = 0) in the shader
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // only the vertex shader reads it
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &uboLayoutBinding;
+
+    if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        std::cerr << "Failed to create descriptor set layout\n";
+        return -1;
+    }
+
+    std::cout << "Descriptor set layout created\n";
+    return 0;
+}
+
+
+
+
 
 
 
@@ -552,11 +640,11 @@ int CreateGraphicsPipeline() {
     colorBlending.attachmentCount = 1; // only write to one color attachment
     colorBlending.pAttachments = &colorBlendAttachment;
 
-    // pipline layout is for passing extra data like uniform buffer objects
-    // TODO: create UBO struct 
+    // pipline layout is for passing uniform buffer objects (pretty sure it can pass in other stuff also)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
@@ -629,11 +717,23 @@ void Cleanup() {
     */
     CleanupSwapchain();
     vkDestroySurfaceKHR(instance, surface, nullptr);
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr); // also frees the descriptor set allocated from it
+    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+    vkDestroyBuffer(device, uniformBuffer, nullptr);
+    vkFreeMemory(device, uniformBufferMemory, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
 }
+
+
+
+
+
+
+
+
 
 int CreateFramebuffers() {
     // a framebuffer links the render pass to the actual images to render into
@@ -761,6 +861,9 @@ void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex) {
     // need VK_PIPELINE_BIND_POINT_GRAPHICS cos this isnt a compute shader
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+    // binds our uniform buffer's descriptor set so the shader can access ubo.model on the upcoming draw call
+    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+
     VkBuffer vertexBuffers[] = { vertexBuffer };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
@@ -870,6 +973,75 @@ void CreateVertexBuffer() {
     std::cout << "Vertex buffer created\n";
 }
 
+
+
+void CreateUniformBuffer() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
+
+    // map it once and leave it mapped
+    // write new data into it every frame
+    vkMapMemory(device, uniformBufferMemory, 0, bufferSize, 0, &uniformBufferMapped);
+
+    std::cout << "Uniform buffer created\n";
+}
+
+
+
+
+
+// Create a descriptor pool and allocate one descriptor set from it
+int CreateDescriptorPoolAndSet() {
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // this pool needs to supply uniform buffer type descriptors
+    poolSize.descriptorCount = 1; // we only need one
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1; // one VkDescriptorPoolSize entry
+    poolInfo.pPoolSizes = &poolSize; // that entry
+    poolInfo.maxSets = 1; // total number of desciptior SETS this pool can allocate (only want 1)
+
+    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        std::cerr << "Failed to create descriptor pool\n";
+        return -1;
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorPool; // allocate from this pool
+    allocInfo.descriptorSetCount = 1; // allocate 1 set
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+        std::cerr << "Failed to allocate descriptor set\n";
+        return -1;
+    }
+
+    // point the descriptor set at the uniform buffer
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = uniformBuffer;
+    bufferInfo.offset = 0; // start at byte 0
+    bufferInfo.range = sizeof(UniformBufferObject); // how many btes this descriptor covers
+
+    // stup uniform buffer to specifc binding slot in the descriptor set
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSet; // which descriptor set to write into
+    descriptorWrite.dstBinding = 0; // which binding within that set. matches shaders binding = 0
+    descriptorWrite.dstArrayElement = 0; // which array element, if this binding were an array (it's not, so 0)
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // must match the layouts declared type at this binding
+    descriptorWrite.descriptorCount = 1; // writing 1 descriptor
+    descriptorWrite.pBufferInfo = &bufferInfo; // the actual buffer info from above
+
+    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+
+    std::cout << "Descriptor pool and set created\n";
+    return 0;
+}
+
+
 void CreateIndexBuffer() { // basicly the same as for the vertex buffer
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
@@ -895,6 +1067,7 @@ void CleanupSwapchain() {
 }
 
 void RecreateSwapchain() {
+    std::cout << "\nRecreating Swapchain...\n";
     // handle minimization, the windoww size becomes 0x0 and Vulkan dosnt allow a 0x0 swapchain
     // so just wait until the window has a real size again
     int width = 0, height = 0;
@@ -917,12 +1090,28 @@ void RecreateSwapchain() {
     CreateFramebuffers();
 }
 
+void UpdateUniformBuffer() {
+    static auto startTime = std::chrono::high_resolution_clock::now(); // will be skipped after initilization
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float>(currentTime - startTime).count(); // seconds since start
+
+    UniformBufferObject ubo{};
+    // rotate around the Z axis cos this is in 2d at a constant speed
+    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    memcpy(uniformBufferMapped, &ubo, sizeof(ubo)); // already mapped, so just overwrite directly
+}
+
 
 void DrawFrame() {
     // will block the main thread until vkWaitForFence returns
     // VK_TRUE means wait until ALL are signaled
     // UINT64_MAX is timeout in nanosceonds. in this case we are waiting 600 years :)
     vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+
+
+    UpdateUniformBuffer(); // recompute rotation for this frame
 
     // grab the next available image from the swapchain
     // so we know which framebuffer (swapchainFramebuffers[imageIndex]) is safe to draw into
@@ -1001,6 +1190,7 @@ int main() {
     if (CreateSwapchain() != 0) return -1;
     if (CreateImageViews() != 0) return -1;
     if (CreateRenderPass() != 0) return -1;
+    if (CreateDescriptorSetLayout() != 0) return -1;
     if (CreateGraphicsPipeline() != 0) return -1;
     GetGraphicsQueue();
     if (CreateFramebuffers() != 0) return -1;
@@ -1009,6 +1199,8 @@ int main() {
     if (CreateSyncObjects() != 0) return -1;
     CreateVertexBuffer();
     CreateIndexBuffer();
+    CreateUniformBuffer();
+    if (CreateDescriptorPoolAndSet() != 0) return -1;
 
     MainLoop();
 
