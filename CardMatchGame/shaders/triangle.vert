@@ -1,11 +1,11 @@
 #version 450
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(push_constant) uniform PushConstants {
     mat4 model;
-} ubo;
+} pc;
 
 layout(location = 0) in vec2 inPosition;
 
 void main() {
-    gl_Position = ubo.model * vec4(inPosition, 0.0, 1.0);
+    gl_Position = pc.model * vec4(inPosition, 0.0, 1.0);
 }
