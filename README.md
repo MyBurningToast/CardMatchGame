@@ -14,4 +14,4 @@
 - If using different folders, change the `GLFW_DIR` and `GLM_DIR` paths in `CMakeLists.txt`
 
 ## Current Progress
-Right now there is only a multi color triangle
+Right now there is only a static grid of squares 
