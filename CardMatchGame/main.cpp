@@ -97,6 +97,8 @@ struct Vertex {
 
 /*
 Note for myself:
+(push constants are just small but fast ubos)
+
 uniform buffers and MVP (model view projection)
 
 A ubo is data that is the same for every vertex/fragment in a draw call
