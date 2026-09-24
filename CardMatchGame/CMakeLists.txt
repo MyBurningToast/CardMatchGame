@@ -21,7 +21,7 @@ set_target_properties(glfw PROPERTIES
 # GLM Header
 set(GLM_DIR "C:/libs/glm") # CHANGE THIS TO YOUR CORRECT PATH
 
-add_executable (CardMatchGame "main.cpp"  )
+add_executable (CardMatchGame "main.cpp"   "Renderer.cpp" "Renderer.h" "Game.cpp" "Game.h")
 
 target_include_directories(CardMatchGame PRIVATE ${GLM_DIR})
 
