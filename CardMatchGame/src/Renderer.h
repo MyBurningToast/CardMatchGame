@@ -28,6 +28,10 @@ public:
 
     void Cleanup();
 
+    void GetCursorPos(double& x, double& y); // mouse position in pixels. top left is (0,0)
+    void GetFramebufferSize(int& width, int& height); // actual drawable size in pixels
+    bool IsMouseButtonPressed(int button); // true while the given button is held down
+
 private:
     GLFWwindow* window;
     VkInstance instance;

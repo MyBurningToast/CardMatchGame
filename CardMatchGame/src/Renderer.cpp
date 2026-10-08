@@ -926,6 +926,19 @@ int Renderer::Init() {
     return 0;
 }
 
+
+void Renderer::GetCursorPos(double& x, double& y) {
+    glfwGetCursorPos(window, &x, &y);
+}
+
+void Renderer::GetFramebufferSize(int& width, int& height) {
+    glfwGetFramebufferSize(window, &width, &height);
+}
+
+bool Renderer::IsMouseButtonPressed(int button) {
+    return glfwGetMouseButton(window, button) == GLFW_PRESS;
+}
+
 void Renderer::DrawFrame(const std::vector<glm::mat4>& transforms) {
     // will block the main thread until vkWaitForFence returns
     // VK_TRUE means wait until ALL are signaled
