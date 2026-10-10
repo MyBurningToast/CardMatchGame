@@ -96,30 +96,28 @@ int main() {
             }
         }
 
-        // build transforms for this frame based on current card state
-        std::vector<glm::mat4> transforms;
+        // build one QuadInstnace (matrix+coolor) per card based on its current state
+        std::vector<QuadInstance> quads;
         for (int y = 0; y < gridHeight; y++) {
             for (int x = 0; x < gridWidth; x++) {
                 const CardData& card = game.GetCard(x, y);
 
-                if (card.isMatched) continue; // matched cards disappear for now // TODO: keep them face up after i add actual text one them
+                if (card.isMatched) continue; // matched cards disappear for now
 
                 float worldX = originX + x * cardSpacing;
                 float worldY = originY + y * cardSpacing;
 
                 glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(worldX, worldY, 0.0f));
+                model = glm::scale(model, glm::vec3(cardScale, cardScale, 1.0f));
 
-                // TODO add visuals
-                // temporary until textures exist
-                // face up is full size, face down is smaller
-                float scale = card.isFaceUp ? cardScale : cardScale * 0.6f;
-                model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
+                // temporary visual until textures exist. face down = blue, face up = orange
+                glm::vec4 color = card.isFaceUp ? glm::vec4(1.0f, 0.6f, 0.0f, 1.0f) : glm::vec4(0.2f, 0.4f, 0.9f, 1.0f);
 
-                transforms.push_back(model);
+                quads.push_back({ model, color });
             }
         }
 
-        renderer.DrawFrame(transforms);
+        renderer.DrawFrame(quads);
     }
 
     renderer.WaitIdle();

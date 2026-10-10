@@ -9,9 +9,14 @@
 #include <string>
 
 // This is the data for a single vertex. For now only stores position
-// TODO: store color data in vertex
 struct Vertex {
     glm::vec2 pos;
+};
+
+// everything the renderer needs to draw one quad
+struct QuadInstance {
+    glm::mat4 model; // position / scale / rotation
+    glm::vec4 color; // RGBA (each 0.0 - 1.0)
 };
 
 class Renderer {
@@ -19,8 +24,7 @@ public:
     // runs every vulkan setup step in order. returns -1 on failure
     int Init();
 
-    // draws one frame. transforms is one model matrix per quad to draw (eg one per card)
-    void DrawFrame(const std::vector<glm::mat4>& transforms);
+    void DrawFrame(const std::vector<QuadInstance>& quads);
 
     bool WindowShouldClose();
     void PollEvents();
@@ -78,7 +82,7 @@ private:
     int CreateCommandBuffer();
     int CreateSyncObjects();
 
-    void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, const std::vector<glm::mat4>& transforms);
+    void RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, const std::vector<QuadInstance>& quads);
 
     uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);

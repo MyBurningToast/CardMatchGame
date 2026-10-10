@@ -18,7 +18,7 @@ const bool enableValidationLayers = true; // on in debug builds
 
 /*
 Note for myself:
-(push constants are just small but fast ubos)
+(push constants are just small but fast ubos. vulan garentees 128 bytes)
 
 uniform buffers and MVP (model view projection)
 
@@ -485,13 +485,13 @@ int Renderer::CreateGraphicsPipeline() {
 
     // interpet vertex structs raw bytes as shader input
     VkVertexInputBindingDescription bindingDescription{};
-    bindingDescription.binding = 0; // this buffers slot in the command state. there migh be another buffer for color. TODO: add color binding
+    bindingDescription.binding = 0; // this buffers slot in the command state. there migh be another buffer for color
     bindingDescription.stride = sizeof(Vertex); // how many bytes to skip to get to the next in the buffer
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // go to next vertex's data for ever vertex processed
 
     VkVertexInputAttributeDescription attributeDescription{};
     attributeDescription.binding = 0; // which binding (vertex buffer stream) this attribute's data comes from. matches the binding description
-    attributeDescription.location = 0; // matches location = 0 in the vertex shader. TODO: add another attribute for colour
+    attributeDescription.location = 0; // matches location = 0 in the vertex shader
     attributeDescription.format = VK_FORMAT_R32G32_SFLOAT; // vec2 of floats
     attributeDescription.offset = offsetof(Vertex, pos); // byte offset of the pos field within the vertex struct
 
@@ -562,7 +562,7 @@ int Renderer::CreateGraphicsPipeline() {
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(glm::mat4); // just the one matrix for now
+    pushConstantRange.size = sizeof(QuadInstance); // matrix + color (80 bytes total), vulkan guarantees a minimum of 128 byte
 
     // pipline layout defines how shaders access external resources (textures/buffers/push constants)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -710,7 +710,7 @@ int Renderer::CreateSyncObjects() {
 }
 
 // records the draw commands into the command buffer, targeting a specific framebuffer
-void Renderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, const std::vector<glm::mat4>& transforms) {
+void Renderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageIndex, const std::vector<QuadInstance>& quads) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -745,10 +745,10 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageInde
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(cmdBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-    // draw one quad per transform we were given - the renderer doesn't know or care what these represent (cards, etc)
-    for (const auto& model : transforms) {
-        vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
-
+    // draw one quad per QuadInstance. push model matrix + color, then draw the shared quad mesh
+    for (const auto& quad : quads) {
+        // push constants are re sent before every draw. each quad gets its own matrx and color
+        vkCmdPushConstants(cmdBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(QuadInstance), &quad);
         vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
     }
 
@@ -939,7 +939,7 @@ bool Renderer::IsMouseButtonPressed(int button) {
     return glfwGetMouseButton(window, button) == GLFW_PRESS;
 }
 
-void Renderer::DrawFrame(const std::vector<glm::mat4>& transforms) {
+void Renderer::DrawFrame(const std::vector<QuadInstance>& quads) {
     // will block the main thread until vkWaitForFence returns
     // VK_TRUE means wait until ALL are signaled
     // UINT64_MAX is timeout in nanosceonds. in this case we are waiting 600 years :)
@@ -963,7 +963,7 @@ void Renderer::DrawFrame(const std::vector<glm::mat4>& transforms) {
 
     // reset command buffer to initial state so it can be re-recorded
     vkResetCommandBuffer(commandBuffer, 0);
-    RecordCommandBuffer(commandBuffer, imageIndex, transforms); // record the next frame
+    RecordCommandBuffer(commandBuffer, imageIndex, quads); // record the next frame
 
     // tells the gpu to not start executing this submission until imageAvailableSemaphore is signaled
     VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
