@@ -10,7 +10,7 @@ const int gridWidth = 4;
 const int gridHeight = 4;
 const float cardSpacing = 0.5f; // world/NDC space distance between card centers
 const float cardScale = 0.2f; // half of this is the click hitbox radius
-const double resolveDelay = 0.8; // seconds both cards stay visible
+const double revealDuration = 0.8; // seconds both cards stay visible
 
 // TODO read word list from a file
 std::vector<WordPair> GetTestWordPairs() {
@@ -41,7 +41,7 @@ int main() {
     float originY = -(gridHeight - 1) * cardSpacing / 2.0f;
 
     bool mouseWasDown = false;
-    double resolveAt = 0.0;
+    double checkPairAt = 0.0;
 
     while (!renderer.WindowShouldClose()) {
         renderer.PollEvents(); // glfw gets user input
@@ -82,16 +82,16 @@ int main() {
                     }
                     else if (result == FlipResult::FlippedSecond) {
                         std::cout << "Flipped second (" << gridX << "," << gridY << "): " << game.GetCard(gridX, gridY).word << "\n";
-                        resolveAt = renderer.GetTime() + resolveDelay; // start the countdown
+                        checkPairAt = renderer.GetTime() + revealDuration; // start the countdown
                     }
                 }
             }
         }
 
-        // while waiting game.IsResolving() stays true
+        // while waiting game.HasPendingPair() stays true
         // so that TryFlipCard rejects any new clicks
-        if (game.IsResolving() && renderer.GetTime() >= resolveAt) {
-            bool matched = game.ResolvePendingFlips();
+        if (game.HasPendingPair() && renderer.GetTime() >= checkPairAt) {
+            bool matched = game.CheckPair();
             std::cout << (matched ? "Match!\n" : "No match - flipping back\n");
 
             if (matched && game.IsComplete()) {

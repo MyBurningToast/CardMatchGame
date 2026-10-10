@@ -49,7 +49,7 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
     // -1 means no card selected
     firstX = -1; firstY = -1;
     secondX = -1; secondY = -1;
-    isResolving = false; // not currently waiting on a match check
+    hasPendingPair = false; // not currently waiting on a match check
 
     return true;
 }
@@ -58,9 +58,9 @@ FlipResult Game::TryFlipCard(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height)
         return FlipResult::RejectedOutOfBounds;
 
-    // two cards are already face up and waiting to be resolved
-    if (isResolving)
-        return FlipResult::RejectedBusy;
+    // a pair is still waiting to be checked, so reject new flips
+    if (hasPendingPair)
+        return FlipResult::RejectedPairPending;
 
     CardData& card = CardAt(x, y);
 
@@ -80,18 +80,17 @@ FlipResult Game::TryFlipCard(int x, int y) {
         return FlipResult::Flipped;
     }
 
-    // otherwise this is the second flip. record it and lock input until the caller resolves the pair
-    // TODO: add small delay so player can see it
+    // otherwise this is the second flip. record it and lock input until the caller checks the pair
     secondX = x;
     secondY = y;
-    isResolving = true;
+    hasPendingPair = true;
     return FlipResult::FlippedSecond;
 }
 
 // Checks the two face up cards and either locks them as matched or flips them back
-// true if match, false if not or nothing to resolve
-bool Game::ResolvePendingFlips() {
-    if (!isResolving) return false;
+// true if match, false if not or nothing to check
+bool Game::CheckPair() {
+    if (!hasPendingPair) return false;
 
     CardData& first = CardAt(firstX, firstY);
     CardData& second = CardAt(secondX, secondY);
@@ -110,7 +109,7 @@ bool Game::ResolvePendingFlips() {
     // reset back to -1 (none selected)
     firstX = -1; firstY = -1;
     secondX = -1; secondY = -1;
-    isResolving = false;
+    hasPendingPair = false;
 
     return isMatch;
 }

@@ -22,10 +22,10 @@ struct WordPair {
 
 enum class FlipResult {
     Flipped, // first card of a turn flipped
-    FlippedSecond, // 2nd card fliped. caller should schedule ResolvePendingFlips
+    FlippedSecond, // 2nd card flipped. caller should schedule CheckPair (after a delay)
     RejectedAlreadyFaceUp,
     RejectedMatched,
-    RejectedBusy, // a pair waiting to be resolved
+    RejectedPairPending, // a pair alrdy waiting to be checked
     RejectedOutOfBounds
 };
 
@@ -38,12 +38,12 @@ public:
     const CardData& GetCard(int x, int y) const;
 
     FlipResult TryFlipCard(int x, int y);
-    bool ResolvePendingFlips(); // returns true if it was a match
+    bool CheckPair(); // returns true if it was a match
     bool IsComplete() const;
 
     int GetWidth() const { return width; }
     int GetHeight() const { return height; }
-    bool IsResolving() const { return isResolving; } // TODO: let the UI know when to start the resolve delay
+    bool HasPendingPair() const { return hasPendingPair; } // TODO: let the UI know when to start the reveal delay
 
 private:
     int width = 0;
@@ -52,7 +52,7 @@ private:
 
     int firstX = -1, firstY = -1;
     int secondX = -1, secondY = -1;
-    bool isResolving = false;
+    bool hasPendingPair = false;
 
     // private because only Game should be able to modify cards directly
     CardData& CardAt(int x, int y);
