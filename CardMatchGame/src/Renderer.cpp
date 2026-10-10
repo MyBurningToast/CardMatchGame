@@ -939,6 +939,10 @@ bool Renderer::IsMouseButtonPressed(int button) {
     return glfwGetMouseButton(window, button) == GLFW_PRESS;
 }
 
+double Renderer::GetTime() {
+    return glfwGetTime(); // seconds counting up from when glfwInit() was called
+}
+
 void Renderer::DrawFrame(const std::vector<QuadInstance>& quads) {
     // will block the main thread until vkWaitForFence returns
     // VK_TRUE means wait until ALL are signaled

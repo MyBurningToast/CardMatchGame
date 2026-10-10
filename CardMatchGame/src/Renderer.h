@@ -36,6 +36,8 @@ public:
     void GetFramebufferSize(int& width, int& height); // actual drawable size in pixels
     bool IsMouseButtonPressed(int button); // true while the given button is held down
 
+    double GetTime(); // seconds since the window system started
+
 private:
     GLFWwindow* window;
     VkInstance instance;
