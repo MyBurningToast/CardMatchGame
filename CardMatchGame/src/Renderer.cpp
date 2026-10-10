@@ -66,10 +66,10 @@ tells the gpu which descriptor set (and therefore which buffer) to use for this 
 
 // in Vulkans NDC(Normalized Device Coordinates)/screen space, positive Y points downward
 const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}}, // top left
-    {{ 0.5f, -0.5f}}, // top right
-    {{ 0.5f,  0.5f}}, // bottom right
-    {{-0.5f,  0.5f}}, // bottom left
+    {{-0.5f, -0.5f}, {0.0f, 0.0f}}, // top left
+    {{ 0.5f, -0.5f}, {1.0f, 0.0f}}, // top right
+    {{ 0.5f,  0.5f}, {1.0f, 1.0f}}, // bottom right
+    {{-0.5f,  0.5f}, {0.0f, 1.0f}}, // bottom left
 };
 
 // index buffer data
@@ -485,23 +485,31 @@ int Renderer::CreateGraphicsPipeline() {
 
     // interpet vertex structs raw bytes as shader input
     VkVertexInputBindingDescription bindingDescription{};
-    bindingDescription.binding = 0; // this buffers slot in the command state. there migh be another buffer for color
+    bindingDescription.binding = 0; // this buffers slot in the command state. pos and uv in ths one buffer
     bindingDescription.stride = sizeof(Vertex); // how many bytes to skip to get to the next in the buffer
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // go to next vertex's data for ever vertex processed
 
-    VkVertexInputAttributeDescription attributeDescription{};
-    attributeDescription.binding = 0; // which binding (vertex buffer stream) this attribute's data comes from. matches the binding description
-    attributeDescription.location = 0; // matches location = 0 in the vertex shader
-    attributeDescription.format = VK_FORMAT_R32G32_SFLOAT; // vec2 of floats
-    attributeDescription.offset = offsetof(Vertex, pos); // byte offset of the pos field within the vertex struct
+    // one description per field in the Vertex struct (pos and uv)
+    VkVertexInputAttributeDescription attributeDescriptions[2]{};
+
+    attributeDescriptions[0].binding = 0; // which binding (vertex buffer stream) this attributes data comes from. matches the binding description
+    attributeDescriptions[0].location = 0; // matches location = 0 in the vertex shader (inPosition)
+    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // vec2 of floats
+    attributeDescriptions[0].offset = offsetof(Vertex, pos); // byte offset of the pos field within the vertex struct
+
+    attributeDescriptions[1].binding = 0; // same buffer, just a different field in each vertex
+    attributeDescriptions[1].location = 1; // matches location = 1 in the vertex shader (inUV)
+    attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT; // vec2 of floats
+    attributeDescriptions[1].offset = offsetof(Vertex, uv); // byte offset of the uv field within the vertex struct
+
 
     // combine binding and attribute descipritons and attachs them to the pipline
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = 1;
-    vertexInputInfo.pVertexAttributeDescriptions = &attributeDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = 2; // pos and uv
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions;
 
     // input assembly is how vertices are grouped into shapes
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};

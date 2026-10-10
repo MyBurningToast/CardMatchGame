@@ -11,6 +11,7 @@
 // This is the data for a single vertex. For now only stores position
 struct Vertex {
     glm::vec2 pos;
+    glm::vec2 uv; // (0,0) top left of the texture (1,1) is bottom right
 };
 
 // everything the renderer needs to draw one quad
