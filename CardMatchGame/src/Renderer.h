@@ -73,6 +73,10 @@ private:
     VkImageView textureImageView; // how shaders will look at the image
     VkSampler textureSampler; // how shaders will read from it (filtering / edges)
 
+    VkDescriptorSetLayout descriptorSetLayout; // describes what the shaders expect (a texture at binding 0)
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet descriptorSet; // points binding 0 at our texture image view and sampler
+
     bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayers);
 
     int InitWindow();
@@ -106,4 +110,7 @@ private:
     void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
     int CreateTexture();
     int CreateTextureSampler();
+
+    int CreateDescriptorSetLayout();
+    int CreateDescriptorPoolAndSet();
 };

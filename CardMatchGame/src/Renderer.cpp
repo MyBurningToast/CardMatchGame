@@ -575,7 +575,8 @@ int Renderer::CreateGraphicsPipeline() {
     // pipline layout defines how shaders access external resources (textures/buffers/push constants)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.setLayoutCount = 1; // the texture descriptor set layout
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -752,6 +753,9 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageInde
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(cmdBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+    // bind the texture desciptr set once. every quad shares it, so it dosent need rebinding per card
+    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
     // draw one quad per QuadInstance. push model matrix + color, then draw the shared quad mesh
     for (const auto& quad : quads) {
@@ -1083,6 +1087,78 @@ int Renderer::CreateTextureSampler() {
     return 0;
 }
 
+int Renderer::CreateDescriptorSetLayout() {
+    // tells the pipeline to expect an image + sampler at binding 0
+    VkDescriptorSetLayoutBinding samplerBinding{};
+    samplerBinding.binding = 0; // matches layout(binding = 0) in the fragment shader
+    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // an image and its sampler bundled togther
+    samplerBinding.descriptorCount = 1;
+    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // only the fragment shader reads it
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &samplerBinding;
+
+    if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        std::cerr << "Failed to create descriptor set layout\n";
+        return -1;
+    }
+
+    std::cout << "Descriptor set layout created\n";
+    return 0;
+}
+
+int Renderer::CreateDescriptorPoolAndSet() {
+    // the pool needs to know what types of descriptors it will hand out and how many
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = 1; // one set is enough, every quad shares the same texture
+
+    if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+        std::cerr << "Failed to create descriptor pool\n";
+        return -1;
+    }
+
+    // alocate one set form the pool, using our layout
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+        std::cerr << "Failed to allocate descriptor set\n";
+        return -1;
+    }
+
+    // the set exists but is empty. point binding 0 the the actual image view + sampler
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // the layout the image is in while the shader reads it (it was transitioned there in CreateTexture)
+    imageInfo.imageView = textureImageView;
+    imageInfo.sampler = textureSampler;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSet;
+    descriptorWrite.dstBinding = 0; // matches the layout binding
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+
+    std::cout << "Descriptor pool and set created\n";
+    return 0;
+}
+
 
 void Renderer::CreateIndexBuffer() { // basicly the same as for the vertex buffer
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
@@ -1142,6 +1218,7 @@ int Renderer::Init() {
     if (CreateSwapchain() != 0) return -1;
     if (CreateImageViews() != 0) return -1;
     if (CreateRenderPass() != 0) return -1;
+    if (CreateDescriptorSetLayout() != 0) return -1;
     if (CreateGraphicsPipeline() != 0) return -1;
     GetGraphicsQueue();
     if (CreateFramebuffers() != 0) return -1;
@@ -1153,6 +1230,7 @@ int Renderer::Init() {
 
     if (CreateTexture() != 0) return -1;
     if (CreateTextureSampler() != 0) return -1;
+    if (CreateDescriptorPoolAndSet() != 0) return -1;
 
     return 0;
 }
@@ -1260,6 +1338,8 @@ void Renderer::Cleanup() {
         vkDestroySemaphore(device, semaphore, nullptr);
     }
     vkDestroyCommandPool(device, commandPool, nullptr); // also frees the command buffer allocated from it
+
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr); // also frees the descriptor set allocated from it
 
     vkDestroySampler(device, textureSampler, nullptr);
     vkDestroyImageView(device, textureImageView, nullptr);
