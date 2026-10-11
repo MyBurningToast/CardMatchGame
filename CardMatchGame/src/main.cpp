@@ -1,5 +1,6 @@
 ﻿#include "Renderer.h"
 #include "Game.h"
+#include "Font.h"
 
 #include <vector>
 #include <iostream>
@@ -27,8 +28,13 @@ std::vector<WordPair> GetTestWordPairs() {
 }
 
 int main() {
+    Font font;
+    // load the font
+    if (!font.Load("assets/fonts/Roboto-Regular.ttf", 32.0f)) return -1; // 32 = how many pixels tall the letters are baked
+
     Renderer renderer;
-    if (renderer.Init() != 0) return -1;
+    // the renderer uploads the font atlas to the gpu as its texture
+    if (renderer.Init(font.GetAtlasPixels(), font.GetAtlasWidth(), font.GetAtlasHeight()) != 0) return -1;
 
     Game game;
     if (!game.BuildGrid(GetTestWordPairs(), gridWidth, gridHeight)) {
@@ -119,6 +125,17 @@ int main() {
                 quads.push_back({ model, color });
             }
         }
+
+
+        // TESTING ONLY, replace with one big quad
+        const bool debugShowAtlas = true;
+        if (debugShowAtlas) {
+            quads.clear();
+            glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(1.8f, 1.8f, 1.0f));
+            quads.push_back({ model, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) }); // white so atlis shows
+        }
+
+
 
         renderer.DrawFrame(quads);
     }

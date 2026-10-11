@@ -23,7 +23,8 @@ struct QuadInstance {
 class Renderer {
 public:
     // runs every vulkan setup step in order. returns -1 on failure
-    int Init();
+    // uploads the 1 byte per pixel font atlas to the gpu as the one texture all quads sample from
+    int Init(const std::vector<uint8_t>& texturePixels, uint32_t texWidth, uint32_t texHeight);
 
     void DrawFrame(const std::vector<QuadInstance>& quads);
 
@@ -108,7 +109,7 @@ private:
     void EndSingleTimeCommands(VkCommandBuffer cmd);
     void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
     void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
-    int CreateTexture();
+    int CreateTexture(const std::vector<uint8_t>& pixels, uint32_t texWidth, uint32_t texHeight);
     int CreateTextureSampler();
 
     int CreateDescriptorSetLayout();

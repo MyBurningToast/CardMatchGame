@@ -978,20 +978,9 @@ void Renderer::TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkI
     EndSingleTimeCommands(cmd);
 }
 
-int Renderer::CreateTexture() {
-    // TEMPARARY DEBUG
-    // make a 64x64 checkerboard (in code)
-    // one byte per pixel (grayscale)
-    // TODO: replaced with the real font atlas
-    const uint32_t texWidth = 64;
-    const uint32_t texHeight = 64;
-    std::vector<uint8_t> pixels(texWidth * texHeight);
-    for (uint32_t y = 0; y < texHeight; y++) {
-        for (uint32_t x = 0; x < texWidth; x++) {
-            bool light = ((x / 8) + (y / 8)) % 2 == 0; // 8 pixel squares
-            pixels[y * texWidth + x] = light ? 255 : 100;
-        }
-    }
+int Renderer::CreateTexture(const std::vector<uint8_t>& pixels, uint32_t texWidth, uint32_t texHeight) {
+    // pixels is the font atlas
+    // grayscale, one byte per pixel, so the total size in bytes equals the pixel count
     VkDeviceSize imageSize = pixels.size();
 
     // staging buffer is cpu visible memory that the gpu copies from
@@ -1064,8 +1053,8 @@ int Renderer::CreateTextureSampler() {
     // a sampler describes how the shader reads from a texture
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_NEAREST; // when magnified it would pick the closest pixel (crisp squares). TODO: probably LINEAR for the font
-    samplerInfo.minFilter = VK_FILTER_NEAREST; // when shrunk (same)
+    samplerInfo.magFilter = VK_FILTER_LINEAR; // when magnified. blend the nearest pixels (smooth letters)
+    samplerInfo.minFilter = VK_FILTER_LINEAR; // same when shrunk
     samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // uv outside 0-1 repeats the edge pixel
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -1108,7 +1097,7 @@ int Renderer::CreateDescriptorSetLayout() {
     std::cout << "Descriptor set layout created\n";
     return 0;
 }
-
+    
 int Renderer::CreateDescriptorPoolAndSet() {
     // the pool needs to know what types of descriptors it will hand out and how many
     VkDescriptorPoolSize poolSize{};
@@ -1208,8 +1197,7 @@ void Renderer::RecreateSwapchain() {
     CreateFramebuffers();
 }
 
-int Renderer::Init() {
-    // if any of these return a non zero vlaue, there was an error
+int Renderer::Init(const std::vector<uint8_t>& texturePixels, uint32_t texWidth, uint32_t texHeight) {
     if (InitWindow() != 0) return -1;
     if (CreateInstance() != 0) return -1;
     if (CreateSurface() != 0) return -1;
@@ -1228,7 +1216,7 @@ int Renderer::Init() {
     CreateVertexBuffer();
     CreateIndexBuffer();
 
-    if (CreateTexture() != 0) return -1;
+    if (CreateTexture(texturePixels, texWidth, texHeight) != 0) return -1;
     if (CreateTextureSampler() != 0) return -1;
     if (CreateDescriptorPoolAndSet() != 0) return -1;
 
