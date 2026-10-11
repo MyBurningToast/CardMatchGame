@@ -39,6 +39,10 @@ add_custom_command(TARGET CardMatchGame POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
 )
 
+if(MSVC) # GCC and Clang compilers already default to UTF-8
+    target_compile_options(CardMatchGame PRIVATE /utf-8) # Read source files as UTF-8 (beacuse of the macrons)
+endif()
+
 # Compile shaders
 # Vulkan cant read shader source code directly. it needs to be pre compiled bytecode called SPIR-V
 # Vulkan SDK has an in built tool for this

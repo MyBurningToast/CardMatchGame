@@ -558,9 +558,17 @@ int Renderer::CreateGraphicsPipeline() {
     // Color blending is how new pixels combine with whats already there. this is used for transparency
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT; // bitmask for what color channels get written to the framebuffer for this attachment
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.blendEnable = VK_TRUE; // blend instead of overwriting
+    // colour: final = src * srcAlpha + dst * (1 - srcAlpha), this is so the edge of letters is a soft fade
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; // weight the new colour by its alpha
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // weight the existing colour by the remainder
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // add the two weighted colours
+    // alpha: just keep the new alhpa. the window is opaque and it doesnt matteer
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
-    // even though colorblending is disabled, its still required by vulkan
+    // global blend state for the pipeline (uses settings above)
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.logicOpEnable = VK_FALSE; // i think its only enabled for super niche blending math
@@ -570,7 +578,7 @@ int Renderer::CreateGraphicsPipeline() {
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(QuadInstance); // matrix + color (80 bytes total), vulkan guarantees a minimum of 128 byte
+    pushConstantRange.size = sizeof(QuadInstance); // matrix + color + uvRect (96 bytes total), vulkan guarantees a minimum of 128 byte
 
     // pipline layout defines how shaders access external resources (textures/buffers/push constants)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};

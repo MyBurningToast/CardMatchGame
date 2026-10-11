@@ -129,3 +129,60 @@ bool Font::SaveAtlasPNG(const std::string& path) const {
     std::cout << "Saved atlas image to " << path << "\n";
     return true;
 }
+
+std::vector<uint32_t> Utf8ToCodepoints(const std::string& text) {
+    std::vector<uint32_t> codepoints;
+    size_t i = 0;
+    while (i < text.size()) {
+        unsigned char c = (unsigned char)text[i];
+        uint32_t codepoint;
+        int extraBytes; // how many continuation bytes folow the first byte
+
+        // REFERENCE (byte layout table): https://datatracker.ietf.org/doc/html/rfc3629#section-3
+        // WHY IS THIS ASCII STUFF SO DAMN CONFUSING!
+        // I think im going to go crazy
+
+        // the first byte tells us how long the character is
+        if (c < 0x80) {
+            // 0xxxxxxx: top bit is 0 (anything below 0x80), so its plain ASCII
+            // the byte already is the codepoint, nothing follows
+            codepoint = c;
+            extraBytes = 0;
+        } else if ((c >> 5) == 0x6) {
+            // 110xxxxx: 2 bytes long (macron vowels are here)
+            // c >> 5 drops the 5 data bits, leaving the top 3 bits; 0x6 = 110
+            // c & 0x1F: 0x1F = 00011111, keeps the 5 data bits and clears the 110 tag
+            codepoint = c & 0x1F;
+            extraBytes = 1;
+        } else if ((c >> 4) == 0xE) {
+            // 1110xxxx: 3 bytes long
+            // c >> 4 leaves the top 4 bits; 0xE = 1110
+            // c & 0x0F: 0x0F = 00001111, keeps the 4 data bits
+            codepoint = c & 0x0F;
+            extraBytes = 2;
+        } else if ((c >> 3) == 0x1E) {
+            // 11110xxx: 4 bytes long
+            // c >> 3 leaves the top 5 bits; 0x1E = 11110
+            // c & 0x07: 0x07 = 00000111, keeps the 3 data bits
+            codepoint = c & 0x07;
+            extraBytes = 3;
+        } else {
+            // not a valid first byte, skip
+            i++;
+            continue;
+        }
+
+        if (i + extraBytes >= text.size()) break; // string ends in the middle of a character
+
+        // each continuation byte is 10xxxxxx. it adds 6 more bits
+        for (int k = 1; k <= extraBytes; k++) {
+            // shift what we have left by 6 bits
+            // 0x3F = 00111111: keep the 6 data bits, drop the 10 tag, and append them
+            codepoint = (codepoint << 6) | ((unsigned char)text[i + k] & 0x3F);
+        }
+
+        codepoints.push_back(codepoint);
+        i += extraBytes + 1;
+    }
+    return codepoints;
+}

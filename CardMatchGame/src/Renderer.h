@@ -18,7 +18,8 @@ struct Vertex {
 struct QuadInstance {
     glm::mat4 model; // position / scale / rotation
     glm::vec4 color; // RGBA (each 0.0 - 1.0)
-};
+    glm::vec4 uvRect; // (u0, v0, u1, v1) the atlas rectangle this quad shows (one letter)
+};  
 
 class Renderer {
 public:

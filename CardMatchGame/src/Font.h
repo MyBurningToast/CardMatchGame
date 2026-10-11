@@ -57,3 +57,7 @@ private:
     std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for chars unicode number to its glyph
     glm::vec2 whiteUV = glm::vec2(0.0f);
 };
+
+// converts a utf8 string into unicode codepoints
+// so somthing like "Kākā" becomes 4 letters instead of 6 bytes (the macron letters are 2 bytes)
+std::vector<uint32_t> Utf8ToCodepoints(const std::string& text);

@@ -27,6 +27,56 @@ std::vector<WordPair> GetTestWordPairs() {
     };
 }
 
+// adds one quad per letter to draw text. shrinks it if its to wide
+// all positions are in NDC. the fonts glyph sizes are baked pixles so convert with ndcPerPizle
+void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std::string& text, float centerX, float centerY, float maxWidth, float maxNdcPerPixel, const glm::vec4& color) {
+    std::vector<uint32_t> codepoints = Utf8ToCodepoints(text);
+
+    // total width of the word in baked pixels (sum of each letters advance)
+    float textWidth = 0.0f;
+    for (uint32_t cp : codepoints) {
+        const Glyph* glyph = font.GetGlyph(cp);
+        if (!glyph) glyph = font.GetGlyph('?'); // letter missing from the atlas
+        if (glyph) textWidth += glyph->advance;
+    }
+    if (textWidth <= 0.0f) return;
+
+    // use normal size unless it wont fit
+    float ndcPerPixel = std::min(maxNdcPerPixel, maxWidth / textWidth);
+
+    // glyphs are positioned relative to the baseline (the line letters sit on)
+    // centering on half the height of a capital H means the baseline is the same on every card
+    const Glyph* capH = font.GetGlyph('H');
+    float halfCapHeight = capH ? -capH->y0 / 2.0f : 0.0f; // y0 is negative (above the baseline)
+
+    float penX = -textWidth / 2.0f; // start at the left edge of the word, so the word is centered
+
+    for (uint32_t cp : codepoints) {
+        const Glyph* glyph = font.GetGlyph(cp);
+        if (!glyph) glyph = font.GetGlyph('?');
+        if (!glyph) continue;
+
+        float glyphWidth = glyph->x1 - glyph->x0;
+        float glyphHeight = glyph->y1 - glyph->y0;
+
+        // spaces have no shape. skip drawing but still move the pen along
+        if (glyphWidth > 0.0f && glyphHeight > 0.0f) {
+            // center of this letter in pixels, relative to the center of the word
+            float glyphCenterX = penX + (glyph->x0 + glyph->x1) / 2.0f;
+            float glyphCenterY = (glyph->y0 + glyph->y1) / 2.0f + halfCapHeight;
+
+            // the shared quad mesh is 1x1 and centered on the origin, so scale it to the letter size and move it
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(centerX + glyphCenterX * ndcPerPixel, centerY + glyphCenterY * ndcPerPixel, 0.0f));
+            model = glm::scale(model, glm::vec3(glyphWidth * ndcPerPixel, glyphHeight * ndcPerPixel, 1.0f));
+
+            quads.push_back({ model, color, glm::vec4(glyph->u0, glyph->v0, glyph->u1, glyph->v1) });
+        }
+
+        penX += glyph->advance;
+    }
+}
+
+
 int main() {
     Font font;
     // load the font
@@ -106,13 +156,17 @@ int main() {
             }
         }
 
-        // build one QuadInstnace (matrix+coolor) per card based on its current state
+        // build the quads for this frame. each card is a backround quad, plus its word as letter quads if its face up
         std::vector<QuadInstance> quads;
+
+        glm::vec2 white = font.GetWhitePixelUV();
+        glm::vec4 whiteRect(white.x, white.y, white.x, white.y); // a rectangle with no size, so every uv inside it is the white pixel
+
         for (int y = 0; y < gridHeight; y++) {
             for (int x = 0; x < gridWidth; x++) {
                 const CardData& card = game.GetCard(x, y);
 
-                if (card.isMatched) continue; // matched cards disappear for now
+                if (card.isMatched) continue; // matched cards disappear TODO: animate it?
 
                 float worldX = originX + x * cardSpacing;
                 float worldY = originY + y * cardSpacing;
@@ -120,10 +174,18 @@ int main() {
                 glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(worldX, worldY, 0.0f));
                 model = glm::scale(model, glm::vec3(cardScale, cardScale, 1.0f));
 
-                // temporary visual until textures exist. face down = blue, face up = orange
+                // face down = blue, face up = orange
                 glm::vec4 color = card.isFaceUp ? glm::vec4(1.0f, 0.6f, 0.0f, 1.0f) : glm::vec4(0.2f, 0.4f, 0.9f, 1.0f);
 
-                quads.push_back({ model, color });
+                quads.push_back({ model, color, whiteRect }); // the card background
+
+                // the word goes after the background so its drawn on top of it
+                if (card.isFaceUp) {
+                    glm::vec4 textColor(0.1f, 0.1f, 0.15f, 1.0f); // near black (contrasts prety good with the orange)
+                    // 0.9 leaves a small margin around the card. 0.0025 = 1 atlas pixel per screen pixel at 800px wide
+                    // TODO: support differnt window size. Actualy maybe not, getting just this stupid shit to work is absolute torture (i hate trying to render text)
+                    AddTextQuads(quads, font, card.word, worldX, worldY, cardScale * 0.9f, 0.0025f, textColor);
+                }
             }
         }
 
