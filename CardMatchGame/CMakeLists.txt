@@ -34,6 +34,11 @@ target_link_libraries(CardMatchGame PRIVATE
     user32
 )
 
+# Copy assets (fonts etc) next to the exe so the program can find them with a relative path
+add_custom_command(TARGET CardMatchGame POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
+)
+
 # Compile shaders
 # Vulkan cant read shader source code directly. it needs to be pre compiled bytecode called SPIR-V
 # Vulkan SDK has an in built tool for this
