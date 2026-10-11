@@ -47,6 +47,8 @@ public:
     // a uv in the middle of a solid white square in the atlas
     // lets us draw plain colored quads (card background) through the same pipeline as text
     glm::vec2 GetWhitePixelUV() const { return whiteUV; }
+    // DEBUG: saves the atlas as a png
+    bool SaveAtlasPNG(const std::string& path) const;
 
 private:
     uint32_t atlasWidth = 512;

@@ -1,5 +1,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION // using the code from stb_truetype header file
 #include "stb_truetype.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include "Font.h"
 
@@ -116,4 +118,14 @@ const Glyph* Font::GetGlyph(uint32_t codepoint) const {
     auto it = glyphs.find(codepoint);
     if (it == glyphs.end()) return nullptr; // TODO: error here???, probobly better to handle is on creation?
     return &it->second; // poiinter to stored glyph
+}
+
+bool Font::SaveAtlasPNG(const std::string& path) const {
+    // 1 = one channel (grayscale). the last argument is the stride(how many bytes to skip to get from one row to the next))
+    if (!stbi_write_png(path.c_str(), (int)atlasWidth, (int)atlasHeight, 1, atlasPixels.data(), (int)atlasWidth)) {
+        std::cerr << "Failed to save atlas image: " << path << "\n";
+        return false;
+    }
+    std::cout << "Saved atlas image to " << path << "\n";
+    return true;
 }

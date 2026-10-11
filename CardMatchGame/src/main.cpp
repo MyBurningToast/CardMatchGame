@@ -31,6 +31,7 @@ int main() {
     Font font;
     // load the font
     if (!font.Load("assets/fonts/Roboto-Regular.ttf", 32.0f)) return -1; // 32 = how many pixels tall the letters are baked
+    font.SaveAtlasPNG("font_atlas_debug.png"); // for debugging
 
     Renderer renderer;
     // the renderer uploads the font atlas to the gpu as its texture
