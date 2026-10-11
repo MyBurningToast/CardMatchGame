@@ -1357,6 +1357,7 @@ void Renderer::Cleanup() {
     */
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
     vkDestroyRenderPass(device, renderPass, nullptr);
     /*
     for (auto imageView : swapchainImageViews) {
