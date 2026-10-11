@@ -127,17 +127,6 @@ int main() {
             }
         }
 
-
-        // TESTING ONLY, replace with one big quad
-        const bool debugShowAtlas = true;
-        if (debugShowAtlas) {
-            quads.clear();
-            glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(1.8f, 1.8f, 1.0f));
-            quads.push_back({ model, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) }); // white so atlis shows
-        }
-
-
-
         renderer.DrawFrame(quads);
     }
 

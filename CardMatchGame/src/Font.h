@@ -52,7 +52,7 @@ public:
 
 private:
     uint32_t atlasWidth = 512;
-    uint32_t atlasHeight = 512;
+    uint32_t atlasHeight = 100;
     std::vector<uint8_t> atlasPixels;
     std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for chars unicode number to its glyph
     glm::vec2 whiteUV = glm::vec2(0.0f);
