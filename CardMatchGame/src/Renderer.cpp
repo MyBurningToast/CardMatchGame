@@ -863,6 +863,226 @@ void Renderer::CreateVertexBuffer() {
     std::cout << "Vertex buffer created\n";
 }
 
+// allocates a throwaway command buffer for some one off work (like uploading a texture) and starts recording
+VkCommandBuffer Renderer::BeginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // can be submitted directly to a queue
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // we only submit this once 
+
+    vkBeginCommandBuffer(cmd, &beginInfo);
+    return cmd;
+}
+
+// stops recording, runs the commands, waits for the gpu to finish, then frees the command buffer
+void Renderer::EndSingleTimeCommands(VkCommandBuffer cmd) {
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE); // no fence, we just wait on the whole queue
+    vkQueueWaitIdle(graphicsQueue); // cpu blocks until everything on this queue is done
+
+    vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+}
+
+// similr to createbuffer. it creats the image, find memory, allocate, bind
+void Renderer::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D; // has width and heihgt
+    imageInfo.extent = { width, height, 1 }; // depth 1 because 2d image
+    imageInfo.mipLevels = 1; // no mipmaps
+    imageInfo.arrayLayers = 1; // not an array texture
+    imageInfo.format = format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL; // gpu picks the memory layout thats fastest to sample (but the cpu cant read it directly)
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // layout the image starts in. UNDEFINED means no valid contents yet
+    imageInfo.usage = usage;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT; // no multisampling
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // only the graphics queue family uses it
+
+    if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create image");
+    }
+
+    
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(device, image, &memRequirements); // ask the driver what memory this image needs
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties); // memory type the image allows + has our properties
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to allocate image memory");
+    }
+
+    vkBindImageMemory(device, image, imageMemory, 0);
+}
+
+// moves an image from one layout to another using a pipeline barrier
+void Renderer::TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) {
+    VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+    // a barrier says to finish the earlier work before the later work strats
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = oldLayout;// layout the image is in now
+    barrier.newLayout = newLayout; // layout to convert it to
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // no queue ownership transfer
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // both must be same if ignored
+    barrier.image = image; // the image this barrier applies to
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;// color data (not depth/stencil)
+    barrier.subresourceRange.baseMipLevel = 0; // first mip level affected
+    barrier.subresourceRange.levelCount = 1; // how many mip levels (just one)
+    barrier.subresourceRange.baseArrayLayer = 0; // first array layer affected
+    barrier.subresourceRange.layerCount = 1; // how many layers (not an array texture)
+
+    VkPipelineStageFlags sourceStage; // pipeline stage that must finish before the barrier (what we wait on)
+    VkPipelineStageFlags destinationStage; // pipeline stage that must wait for the barrier (whats blocked until then)
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        // nothing to wait for, but the copy must not start until the layout change is done
+        barrier.srcAccessMask = 0; // no earlier writes to make visible
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; // the copy will write, so make the layout change visible to it
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT; // wait on nothing (very start of the pipe)
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT; // the copy stage is what gets blocked
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        // the copy must finish writing before the fragment shader is allowed to read
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; // the copy's writes must be flushed/made avalible
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // so shader reads see the datra
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT; // wait for copy to finish
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; // block fragment shader until thenm
+    } else {
+        throw std::runtime_error("Unsupported layout transition");
+    }
+
+    vkCmdPipelineBarrier(cmd, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    EndSingleTimeCommands(cmd);
+}
+
+int Renderer::CreateTexture() {
+    // TEMPARARY DEBUG
+    // make a 64x64 checkerboard (in code)
+    // one byte per pixel (grayscale)
+    // TODO: replaced with the real font atlas
+    const uint32_t texWidth = 64;
+    const uint32_t texHeight = 64;
+    std::vector<uint8_t> pixels(texWidth * texHeight);
+    for (uint32_t y = 0; y < texHeight; y++) {
+        for (uint32_t x = 0; x < texWidth; x++) {
+            bool light = ((x / 8) + (y / 8)) % 2 == 0; // 8 pixel squares
+            pixels[y * texWidth + x] = light ? 255 : 100;
+        }
+    }
+    VkDeviceSize imageSize = pixels.size();
+
+    // staging buffer is cpu visible memory that the gpu copies from
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+    void* data; // cpu pointer to gpu memory
+    // map is a cpu side virtual pointer into gpu memory
+    vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data); // map so cpu can access it via data
+    memcpy(data, pixels.data(), (size_t)imageSize); // copy pixle data from cpu ram into maped meory
+    vkUnmapMemory(device, stagingBufferMemory); // done writing, realease the mapping
+
+    // the real image, in fast gpu only memory
+    // R8_UNORM is a single 8 bit channel, read by the shader as a 0.0 - 1.0 value
+    // TRANSFER_DST means we copy into it. SAMPLED means shaders read from it
+    CreateImage(texWidth, texHeight, VK_FORMAT_R8_UNORM, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+
+    // get the image ready to receive the copy
+    TransitionImageLayout(textureImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // copy the staging buffer into the image
+    VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+    // describes one buffer to image copy
+    // which bytes of the buffer go to which part of the image
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0; // start at the beginning of the buffer
+    region.bufferRowLength = 0; // 0 means the pixels are tightly packed (row length = imageExtent.width)
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;  // copy into the color data
+    region.imageSubresource.mipLevel = 0; // destination mipmap (base lelve)
+    region.imageSubresource.baseArrayLayer = 0; // final destination array layer
+    region.imageSubresource.layerCount = 1; // number of layers to cpoy
+    region.imageOffset = { 0, 0, 0 }; // top left corner in the image to start writing at
+    region.imageExtent = { texWidth, texHeight, 1 }; // size of the region to write (full image and depth 1 for 2d)
+
+    vkCmdCopyBufferToImage(cmd, stagingBuffer, textureImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    EndSingleTimeCommands(cmd);
+
+    // get the image ready for shaders to read
+    TransitionImageLayout(textureImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // the staging buffer did its job
+    vkDestroyBuffer(device, stagingBuffer, nullptr);
+    vkFreeMemory(device, stagingBufferMemory, nullptr);
+
+    // image view (similar to the swapchain image views)
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = textureImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = VK_FORMAT_R8_UNORM; // must match the image
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(device, &viewInfo, nullptr, &textureImageView) != VK_SUCCESS) {
+        std::cerr << "Failed to create texture image view\n";
+        return -1;
+    }
+
+    std::cout << "Texture created\n";
+    return 0;
+}
+
+int Renderer::CreateTextureSampler() {
+    // a sampler describes how the shader reads from a texture
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_NEAREST; // when magnified it would pick the closest pixel (crisp squares). TODO: probably LINEAR for the font
+    samplerInfo.minFilter = VK_FILTER_NEAREST; // when shrunk (same)
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; // uv outside 0-1 repeats the edge pixel
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable = VK_FALSE; // gpu feature not enabled in CreateLogicalDeviece
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK; // color of out of range uvs (unused with clamp but still needs to be set)
+    samplerInfo.unnormalizedCoordinates = VK_FALSE; // uvs are 0-1, not pixel coordinates
+    samplerInfo.compareEnable = VK_FALSE; // only used for shadow maps
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST; // no mipmaps
+    samplerInfo.minLod = 0.0f; // lowest mip level allowed, 0 means full ressolution
+    samplerInfo.maxLod = 0.0f; // highest mip level allowed, 0 means only the base level
+
+    if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+        std::cerr << "Failed to create texture sampler\n";
+        return -1;
+    }
+
+    std::cout << "Texture sampler created\n";
+    return 0;
+}
+
 
 void Renderer::CreateIndexBuffer() { // basicly the same as for the vertex buffer
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
@@ -930,6 +1150,9 @@ int Renderer::Init() {
     if (CreateSyncObjects() != 0) return -1;
     CreateVertexBuffer();
     CreateIndexBuffer();
+
+    if (CreateTexture() != 0) return -1;
+    if (CreateTextureSampler() != 0) return -1;
 
     return 0;
 }
@@ -1037,6 +1260,12 @@ void Renderer::Cleanup() {
         vkDestroySemaphore(device, semaphore, nullptr);
     }
     vkDestroyCommandPool(device, commandPool, nullptr); // also frees the command buffer allocated from it
+
+    vkDestroySampler(device, textureSampler, nullptr);
+    vkDestroyImageView(device, textureImageView, nullptr);
+    vkDestroyImage(device, textureImage, nullptr);
+    vkFreeMemory(device, textureImageMemory, nullptr);
+
     vkDestroyBuffer(device, indexBuffer, nullptr);
     vkFreeMemory(device, indexBufferMemory, nullptr);
     vkDestroyBuffer(device, vertexBuffer, nullptr);

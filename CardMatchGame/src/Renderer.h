@@ -68,6 +68,11 @@ private:
     VkBuffer indexBuffer;
     VkDeviceMemory indexBufferMemory;
 
+    VkImage textureImage;
+    VkDeviceMemory textureImageMemory;
+    VkImageView textureImageView; // how shaders will look at the image
+    VkSampler textureSampler; // how shaders will read from it (filtering / edges)
+
     bool CheckValidationLayerSupport(const std::vector<const char*>& validationLayers);
 
     int InitWindow();
@@ -94,4 +99,11 @@ private:
 
     void CleanupSwapchain();
     void RecreateSwapchain();
+
+    VkCommandBuffer BeginSingleTimeCommands();
+    void EndSingleTimeCommands(VkCommandBuffer cmd);
+    void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
+    int CreateTexture();
+    int CreateTextureSampler();
 };
