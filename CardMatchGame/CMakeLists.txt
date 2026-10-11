@@ -21,9 +21,9 @@ set_target_properties(glfw PROPERTIES
 # GLM Header
 set(GLM_DIR "C:/libs/glm") # CHANGE THIS TO YOUR CORRECT PATH
 
-add_executable (CardMatchGame "src/main.cpp"   "src/Renderer.cpp" "src/Renderer.h" "src/Game.cpp" "src/Game.h")
+add_executable (CardMatchGame "src/main.cpp" "src/Renderer.cpp" "src/Renderer.h" "src/Game.cpp" "src/Game.h" "src/Font.cpp" "src/Font.h")
 
-target_include_directories(CardMatchGame PRIVATE ${GLM_DIR})
+target_include_directories(CardMatchGame PRIVATE ${GLM_DIR} ${CMAKE_SOURCE_DIR}/third_party)
 
 target_link_libraries(CardMatchGame PRIVATE
     Vulkan::Vulkan
