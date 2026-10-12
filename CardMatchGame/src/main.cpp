@@ -16,14 +16,14 @@ const double revealDuration = 0.8; // seconds both cards stay visible
 // TODO read word list from a file
 std::vector<WordPair> GetTestWordPairs() {
     return {
-        {"a1", "a2"},
-        {"b1", "b2"},
-        {"c1", "c2"},
-        {"d1", "d2"},
-        {"e1", "e2"},
-        {"f1", "f2"},
-        {"g1", "g1"},
-        {"h1", "h1"},
+        {"A", "A'"},
+        {"B", "B'"},
+        {"C", "C'"},
+        {"D", "D'"},
+        {"E", "E'"},
+        {"F", "F'"},
+        {"G", "G'"},
+        {"H", "H'"},
     };
 }
 
