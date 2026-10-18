@@ -1244,6 +1244,14 @@ bool Renderer::IsMouseButtonPressed(int button) {
     return glfwGetMouseButton(window, button) == GLFW_PRESS;
 }
 
+bool Renderer::IsKeyPressed(int key) {
+    return glfwGetKey(window, key) == GLFW_PRESS;
+}
+
+void Renderer::RequestClose() {
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
+}
+
 double Renderer::GetTime() {
     return glfwGetTime(); // seconds counting up from when glfwInit() was called
 }

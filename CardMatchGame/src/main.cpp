@@ -93,10 +93,28 @@ int main() {
     float originY = -(gridHeight - 1) * cardSpacing / 2.0f;
 
     bool mouseWasDown = false;
+    bool restartWasDown = false;
     double checkPairAt = 0.0;
 
     while (!renderer.WindowShouldClose()) {
         renderer.PollEvents(); // glfw gets user input
+
+        // escape quits. the loop ends and Cleanup runs as normal
+        if (renderer.IsKeyPressed(GLFW_KEY_ESCAPE)) {
+            renderer.RequestClose();
+        }
+
+        // R restarts. only react to the frame the key goes down, not while it is held
+        bool restartIsDown = renderer.IsKeyPressed(GLFW_KEY_R);
+        if (restartIsDown && !restartWasDown) {
+            // BuildGrid reshuffles the cards and clears any face up or pending cards
+            if (!game.BuildGrid(wordPairs, gridWidth, gridHeight, gridError)) {
+                std::cerr << "Failed to restart: " << gridError << "\n";
+                break;
+            }
+            std::cout << "Restarted\n";
+        }
+        restartWasDown = restartIsDown;
 
         // handel click input
         bool mouseIsDown = renderer.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
@@ -147,7 +165,7 @@ int main() {
             std::cout << (matched ? "Match!\n" : "No match - flipping back\n");
 
             if (matched && game.IsComplete()) {
-                std::cout << "You matched every word!\n";
+                std::cout << "You matched every word! Press R to play again or Escape to quit.\n";
             }
         }
 

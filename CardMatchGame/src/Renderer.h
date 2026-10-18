@@ -37,6 +37,9 @@ public:
 
     void GetCursorPos(double& x, double& y); // mouse position in pixels. top left is (0,0)
     void GetFramebufferSize(int& width, int& height); // actual drawable size in pixels
+
+    bool IsKeyPressed(int key); // true while the given key is held down (use the GLFW_KEY_ constants)
+    void RequestClose(); // asks the main loop to stop. WindowShouldClose() returns true afterwards
     bool IsMouseButtonPressed(int button); // true while the given button is held down
 
     double GetTime(); // seconds since the window system started
