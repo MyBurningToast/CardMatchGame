@@ -62,6 +62,7 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
     firstX = -1; firstY = -1;
     secondX = -1; secondY = -1;
     hasPendingPair = false; // not currently waiting on a match check
+    moves = 0;
 
     return true;
 }
@@ -103,6 +104,7 @@ FlipResult Game::TryFlipCard(int x, int y) {
 // true if match, false if not or nothing to check
 bool Game::CheckPair() {
     if (!hasPendingPair) return false;
+    moves++; // every checked pair counts as a move
 
     CardData& first = CardAt(firstX, firstY);
     CardData& second = CardAt(secondX, secondY);

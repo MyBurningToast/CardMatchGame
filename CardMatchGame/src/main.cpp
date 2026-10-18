@@ -15,6 +15,13 @@ const float cardScale = 0.2f; // half of this is the click hitbox radius
 const double revealDuration = 0.8; // seconds both cards stay visible
 const std::string wordListPath = "assets/words.txt"; // one pair per line: maori,english
 
+// win screen (shown on the empty board once every pair is matched)
+const glm::vec4 winTextColor(1.0f, 1.0f, 1.0f, 1.0f); // white
+const float winTitleScale = 0.005f; // NDC per atlas pixel for the "You win!" line. double the normal text size
+const float winDetailScale = 0.0035f; // NDC per atlas pixel for the smaller lines under it
+const float winLineSpacing = 0.25f; // NDC distance between the lines
+const float winTextMaxWidth = 1.6f; // NDC width a line is allowed to take up before it shrinks
+
 // adds one quad per letter to draw text. shrinks it if its to wide
 // all positions are in NDC. the fonts glyph sizes are baked pixles so convert with ndcPerPizle
 void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std::string& text, float centerX, float centerY, float maxWidth, float maxNdcPerPixel, const glm::vec4& color) {
@@ -199,6 +206,13 @@ int main() {
                     AddTextQuads(quads, font, card.word, worldX, worldY, cardScale * 0.9f, 0.0025f, textColor);
                 }
             }
+        }
+
+        // every card is matched so the board is empty. show the win screen
+        if (game.IsComplete()) {
+            AddTextQuads(quads, font, "You win!", 0.0f, -winLineSpacing, winTextMaxWidth, winTitleScale, winTextColor);
+            AddTextQuads(quads, font, "Moves: " + std::to_string(game.GetMoves()), 0.0f, 0.0f, winTextMaxWidth, winDetailScale, winTextColor);
+            AddTextQuads(quads, font, "Press R to restart", 0.0f, winLineSpacing, winTextMaxWidth, winDetailScale, winTextColor);
         }
 
         renderer.DrawFrame(quads);

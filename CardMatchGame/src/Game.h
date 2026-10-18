@@ -44,11 +44,14 @@ public:
     int GetWidth() const { return width; }
     int GetHeight() const { return height; }
     bool HasPendingPair() const { return hasPendingPair; } // TODO: let the UI know when to start the reveal delay
+    int GetMoves() const { return moves; } // how many pairs of cards have been flipped since the grid was built
 
 private:
     int width = 0;
     int height = 0;
     std::vector<CardData> grid; // flattened 2D grid. index = y * width + x
+
+    int moves = 0; // one move means flipping two cards and checking them
 
     int firstX = -1, firstY = -1;
     int secondX = -1, secondY = -1;
