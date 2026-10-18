@@ -14,4 +14,4 @@
 - If using different folders, change the `GLFW_DIR` and `GLM_DIR` paths in `CMakeLists.txt`
 
 ## Current Progress
-Very minimal game loop. Cards have render the text from a hard coded word list.
+Very minimal game loop. Cards render their text from the word list in `assets/words.txt`.
