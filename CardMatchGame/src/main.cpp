@@ -1,6 +1,7 @@
 ﻿#include "Renderer.h"
 #include "Game.h"
 #include "Font.h"
+#include "WordList.h"
 
 #include <vector>
 #include <iostream>
@@ -12,20 +13,7 @@ const int gridHeight = 4;
 const float cardSpacing = 0.5f; // world/NDC space distance between card centers
 const float cardScale = 0.2f; // half of this is the click hitbox radius
 const double revealDuration = 0.8; // seconds both cards stay visible
-
-// TODO read word list from a file
-std::vector<WordPair> GetTestWordPairs() {
-    return {
-        {"A", "A'"},
-        {"B", "B'"},
-        {"C", "C'"},
-        {"D", "D'"},
-        {"E", "E'"},
-        {"F", "F'"},
-        {"G", "G'"},
-        {"H", "H'"},
-    };
-}
+const std::string wordListPath = "assets/words.txt"; // one pair per line: maori,english
 
 // adds one quad per letter to draw text. shrinks it if its to wide
 // all positions are in NDC. the fonts glyph sizes are baked pixles so convert with ndcPerPizle
@@ -81,13 +69,21 @@ int main() {
     if (!font.Load("assets/fonts/Roboto-Regular.ttf", 32.0f)) return -1; // 32 = how many pixels tall the letters are baked
     font.SaveAtlasPNG("font_atlas_debug.png"); // for debugging
 
+    // the word list is checked against the letters the font can draw, so the font has to load first
+    std::vector<WordPair> wordPairs;
+    std::string wordError;
+    if (!LoadWordPairs(wordListPath, font, (size_t)(gridWidth * gridHeight / 2), wordPairs, wordError)) {
+        std::cerr << "Failed to load word list: " << wordError << "\n";
+        return -1;
+    }
+
     Renderer renderer;
     // the renderer uploads the font atlas to the gpu as its texture
     if (renderer.Init(font.GetAtlasPixels(), font.GetAtlasWidth(), font.GetAtlasHeight()) != 0) return -1;
 
     Game game;
     std::string gridError;
-    if (!game.BuildGrid(GetTestWordPairs(), gridWidth, gridHeight, gridError)) {
+    if (!game.BuildGrid(wordPairs, gridWidth, gridHeight, gridError)) {
         std::cerr << "Failed to build grid: " << gridError << "\n";
         return -1;
     }
