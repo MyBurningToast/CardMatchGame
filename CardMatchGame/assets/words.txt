@@ -1,8 +1,8 @@
-A,A'
-B,B'
-C,C'
-D,D'
-E,E'
-F,F'
-G,G'
-H,H'
+﻿kurī,dog
+ngeru,cat
+manu,bird
+ika,fish
+rākau,tree
+wai,water
+whānau,family
+kai,food
