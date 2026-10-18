@@ -35,9 +35,10 @@ target_link_libraries(CardMatchGame PRIVATE
 )
 
 # Copy assets (fonts etc) next to the exe so the program can find them with a relative path
-add_custom_command(TARGET CardMatchGame POST_BUILD
+add_custom_target(CopyAssets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets
 )
+add_dependencies(CardMatchGame CopyAssets)
 
 if(MSVC) # GCC and Clang compilers already default to UTF-8
     target_compile_options(CardMatchGame PRIVATE /utf-8) # Read source files as UTF-8 (beacuse of the macrons)
