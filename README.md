@@ -13,5 +13,10 @@
 - Unzip GLM to `C:\libs\glm`
 - If using different folders, change the `GLFW_DIR` and `GLM_DIR` paths in `CMakeLists.txt`
 
+## Controls
+- Left click: flip a card
+- R: restart with a new shuffle
+- Escape: quit
+
 ## Current Progress
 Very minimal game loop. Cards render their text from the word list in `assets/words.txt`.
