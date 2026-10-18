@@ -31,8 +31,8 @@ enum class FlipResult {
 
 class Game {
 public:
-    // builds shuffled grid
-    bool BuildGrid(const std::vector<WordPair>& wordPairs, int width, int height);
+    // builds shuffled grid. returns false on failure and puts the reason in errorMessage
+    bool BuildGrid(const std::vector<WordPair>& wordPairs, int width, int height, std::string& errorMessage);
     
     // read only access for rendering. returns const reference
     const CardData& GetCard(int x, int y) const;

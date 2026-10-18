@@ -88,8 +88,9 @@ int main() {
     if (renderer.Init(font.GetAtlasPixels(), font.GetAtlasWidth(), font.GetAtlasHeight()) != 0) return -1;
 
     Game game;
-    if (!game.BuildGrid(GetTestWordPairs(), gridWidth, gridHeight)) {
-        std::cerr << "Failed to build grid\n"; // TODO add more infomation for user. COuld have failed beacuse of an incorrect word list
+    std::string gridError;
+    if (!game.BuildGrid(GetTestWordPairs(), gridWidth, gridHeight, gridError)) {
+        std::cerr << "Failed to build grid: " << gridError << "\n";
         return -1;
     }
 

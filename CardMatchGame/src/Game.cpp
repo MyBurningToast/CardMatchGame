@@ -15,17 +15,26 @@ const CardData& Game::GetCard(int x, int y) const {
 }
 
 // bbuilds and shuffles a new grid of cards from the given word pairs
-bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int gridHeight) {
+bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int gridHeight, std::string& errorMessage) {
     // a grid with no cards can't be played, and would count as already complete
-    if (gridWidth <= 0 || gridHeight <= 0) return false;
+    if (gridWidth <= 0 || gridHeight <= 0) {
+        errorMessage = "Grid size must be at least 1x1, but it was " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight);
+        return false;
+    }
 
     int cardCount = gridWidth * gridHeight;
 
     // cant have an odd number of cards
-    if (cardCount % 2 != 0) return false;
+    if (cardCount % 2 != 0) {
+        errorMessage = "A " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight) + " grid has " + std::to_string(cardCount) + " cards. Cards come in pairs, so the total must be even";
+        return false;
+    }
 
     int pairsNeeded = cardCount / 2;
-    if ((int)wordPairs.size() < pairsNeeded) return false; // not enough words to fill the grid
+    if ((int)wordPairs.size() < pairsNeeded) { // not enough words to fill the grid
+        errorMessage = "A " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight) + " grid needs " + std::to_string(pairsNeeded) + " word pairs, but only " + std::to_string(wordPairs.size()) + " were given";
+        return false;
+    }
 
     width = gridWidth;
     height = gridHeight;
