@@ -16,6 +16,9 @@ const CardData& Game::GetCard(int x, int y) const {
 
 // bbuilds and shuffles a new grid of cards from the given word pairs
 bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int gridHeight) {
+    // a grid with no cards can't be played, and would count as already complete
+    if (gridWidth <= 0 || gridHeight <= 0) return false;
+
     int cardCount = gridWidth * gridHeight;
 
     // cant have an odd number of cards
