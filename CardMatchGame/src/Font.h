@@ -36,8 +36,13 @@ public:
     // read the .ttf file and bake its letters into an atlas image. returns false on failure
     bool Load(const std::string& ttfPath, float pixelHeight);
 
-    // returns nullptr if the font has no glyph for that unicode codepoint
+    // returns the glyph for a unicode codepoint
+    // if the font has no glyph for it, the '?' glyph is returned instead so the card still shows something
+    // (nullptr only if the font hasn't been loaded, because '?' is always baked)
     const Glyph* GetGlyph(uint32_t codepoint) const;
+
+    // true if the font really has this codepoint
+    bool HasGlyph(uint32_t codepoint) const;
 
     // the atlas image. one byte per pixel (0 empty, 255 solid)
     const std::vector<uint8_t>& GetAtlasPixels() const { return atlasPixels; }
@@ -56,6 +61,7 @@ private:
     std::vector<uint8_t> atlasPixels;
     std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for chars unicode number to its glyph
     glm::vec2 whiteUV = glm::vec2(0.0f);
+    static constexpr uint32_t fallbackCodepoint = '?'; // drawn in place of any letter the font doesn't have
 };
 
 // converts a utf8 string into unicode codepoints

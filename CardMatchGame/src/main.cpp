@@ -35,8 +35,7 @@ void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std:
     // total width of the word in baked pixels (sum of each letters advance)
     float textWidth = 0.0f;
     for (uint32_t cp : codepoints) {
-        const Glyph* glyph = font.GetGlyph(cp);
-        if (!glyph) glyph = font.GetGlyph('?'); // letter missing from the atlas
+        const Glyph* glyph = font.GetGlyph(cp); // GetGlyph falls back to '?' for letters the font doesn't have
         if (glyph) textWidth += glyph->advance;
     }
     if (textWidth <= 0.0f) return;
@@ -53,7 +52,6 @@ void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std:
 
     for (uint32_t cp : codepoints) {
         const Glyph* glyph = font.GetGlyph(cp);
-        if (!glyph) glyph = font.GetGlyph('?');
         if (!glyph) continue;
 
         float glyphWidth = glyph->x1 - glyph->x0;

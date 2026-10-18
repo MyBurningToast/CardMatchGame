@@ -113,11 +113,16 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
 }
 
 // look up a characters glyph by codepoint
-// nullptr if the font doesnt have it
+// a missing letter shows as '?' instead of failing, so one odd character doesn't break the whole card
 const Glyph* Font::GetGlyph(uint32_t codepoint) const {
     auto it = glyphs.find(codepoint);
-    if (it == glyphs.end()) return nullptr; // TODO: error here???, probobly better to handle is on creation?
+    if (it == glyphs.end()) it = glyphs.find(fallbackCodepoint);
+    if (it == glyphs.end()) return nullptr; // '?' is always baked, so this only happens if the font isn't loaded
     return &it->second; // poiinter to stored glyph
+}
+
+bool Font::HasGlyph(uint32_t codepoint) const {
+    return glyphs.find(codepoint) != glyphs.end();
 }
 
 bool Font::SaveAtlasPNG(const std::string& path) const {
