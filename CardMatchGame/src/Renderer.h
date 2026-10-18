@@ -107,7 +107,6 @@ private:
     void CreateIndexBuffer();
 
     void CleanupSwapchain();
-    void RecreateSwapchain();
 
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer cmd);

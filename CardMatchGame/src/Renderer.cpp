@@ -144,6 +144,7 @@ int Renderer::InitWindow() {
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // specifiy no OpenGL context beaucse im using Vulkan
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // fixed size window, so the swapchain never needs rebuilding
     window = glfwCreateWindow(800, 800, "Test", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
@@ -1181,30 +1182,6 @@ void Renderer::CleanupSwapchain() {
     vkDestroySwapchainKHR(device, swapchain, nullptr);
 }
 
-void Renderer::RecreateSwapchain() {
-    std::cout << "\nRecreating Swapchain...\n";
-    // handle minimization, the windoww size becomes 0x0 and Vulkan dosnt allow a 0x0 swapchain
-    // so just wait until the window has a real size again
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(window, &width, &height);
-        glfwWaitEvents(); // sleep until something happens
-    }
-
-    // wait for the gpu to finish using the old swapchain before destroying it
-    vkDeviceWaitIdle(device);
-
-    CleanupSwapchain();
-
-    // fetch capabilities again since the window size (and possibly other properties) changed
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
-
-    CreateSwapchain();
-    CreateImageViews();
-    CreateFramebuffers();
-}
-
 int Renderer::Init(const std::vector<uint8_t>& texturePixels, uint32_t texWidth, uint32_t texHeight) {
     if (InitWindow() != 0) return -1;
     if (CreateInstance() != 0) return -1;
@@ -1270,9 +1247,8 @@ void Renderer::DrawFrame(const std::vector<QuadInstance>& quads) {
     VkResult acquireResult = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
     if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
-        // swapchain no longer matches the surface
-        // so rebuild it and skip this frame
-        RecreateSwapchain();
+        // the window is a fixed size so this should not happen (maybe while minimised)
+        // there is nothing to rebuild, so just skip this frame
         return;
     }
 
@@ -1311,13 +1287,7 @@ void Renderer::DrawFrame(const std::vector<QuadInstance>& quads) {
     presentInfo.pImageIndices = &imageIndex; // the aquired image
 
     // request the presentation engine to display this image
-    VkResult presentResult = vkQueuePresentKHR(graphicsQueue, &presentInfo);
-
-    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
-        // suboptimal means it still worked but isn't ideal (size mismatch)
-        // rebuild for next frame
-        RecreateSwapchain();
-    }
+    vkQueuePresentKHR(graphicsQueue, &presentInfo);
 }
 
 bool Renderer::WindowShouldClose() {
