@@ -25,7 +25,7 @@ enum class FlipResult {
     FlippedSecond, // 2nd card flipped. caller should schedule CheckPair (after a delay)
     RejectedAlreadyFaceUp,
     RejectedMatched,
-    RejectedPairPending, // a pair alrdy waiting to be checked
+    RejectedPairPending, // a pair already waiting to be checked
     RejectedOutOfBounds
 };
 
@@ -33,7 +33,7 @@ class Game {
 public:
     // builds shuffled grid. returns false on failure and puts the reason in errorMessage
     bool BuildGrid(const std::vector<WordPair>& wordPairs, int width, int height, std::string& errorMessage);
-    
+
     // read only access for rendering. returns const reference
     const CardData& GetCard(int x, int y) const;
 

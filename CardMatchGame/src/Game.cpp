@@ -14,7 +14,7 @@ const CardData& Game::GetCard(int x, int y) const {
     return grid[y * width + x];
 }
 
-// bbuilds and shuffles a new grid of cards from the given word pairs
+// builds and shuffles a new grid of cards from the given word pairs
 bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int gridHeight, std::string& errorMessage) {
     // a grid with no cards can't be played, and would count as already complete
     if (gridWidth <= 0 || gridHeight <= 0) {
@@ -24,7 +24,7 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
 
     int cardCount = gridWidth * gridHeight;
 
-    // cant have an odd number of cards
+    // can't have an odd number of cards
     if (cardCount % 2 != 0) {
         errorMessage = "A " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight) + " grid has " + std::to_string(cardCount) + " cards. Cards come in pairs, so the total must be even";
         return false;
@@ -40,7 +40,7 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
     height = gridHeight;
 
     std::vector<CardData> newCards;
-    newCards.reserve(cardCount); // avoid realocation while pushing
+    newCards.reserve(cardCount); // avoid reallocation while pushing
 
 
     // for each needed pair, create two cards sharing the same pairId (i),
@@ -52,7 +52,7 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
     }
 
     std::random_device rd; // OS provided "random"
-    std::mt19937 rng(rd()); // Mersenne Twister is a fast pseudorandom number generater, uses the seed from the os
+    std::mt19937 rng(rd()); // Mersenne Twister is a fast pseudorandom number generator, uses the seed from the os
     std::shuffle(newCards.begin(), newCards.end(), rng);
 
     // move (copy is slow) the finished cards into the real grid

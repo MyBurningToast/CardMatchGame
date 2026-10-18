@@ -22,8 +22,8 @@ const float winDetailScale = 0.0035f; // NDC per atlas pixel for the smaller lin
 const float winLineSpacing = 0.25f; // NDC distance between the lines
 const float winTextMaxWidth = 1.6f; // NDC width a line is allowed to take up before it shrinks
 
-// adds one quad per letter to draw text. shrinks it if its to wide
-// all positions are in NDC. the fonts glyph sizes are baked pixles so convert with ndcPerPizle
+// adds one quad per letter to draw text. shrinks it if it's too wide
+// all positions are in NDC. the font's glyph sizes are baked pixels so convert with ndcPerPixel
 void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std::string& text, float centerX, float centerY, float maxWidth, float maxNdcPerPixel, const glm::vec4& color) {
     std::vector<uint32_t> codepoints = Utf8ToCodepoints(text);
 
@@ -35,7 +35,7 @@ void AddTextQuads(std::vector<QuadInstance>& quads, const Font& font, const std:
     }
     if (textWidth <= 0.0f) return;
 
-    // use normal size unless it wont fit
+    // use normal size unless it won't fit
     float ndcPerPixel = std::min(maxNdcPerPixel, maxWidth / textWidth);
 
     // glyphs are positioned relative to the baseline (the line letters sit on)
@@ -123,20 +123,20 @@ int main() {
         }
         restartWasDown = restartIsDown;
 
-        // handel click input
+        // handle click input
         bool mouseIsDown = renderer.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
         bool clickedThisFrame = mouseIsDown && !mouseWasDown;
         mouseWasDown = mouseIsDown;
 
         if (clickedThisFrame) {
             double mouseX, mouseY;
-            renderer.GetCursorPos(mouseX, mouseY); // pixle coords
+            renderer.GetCursorPos(mouseX, mouseY); // pixel coords
 
             int fbWidth, fbHeight;
             renderer.GetFramebufferSize(fbWidth, fbHeight);
 
             // convert pixel coords to the same space the quads are positioned in
-            // vulkan NDC is -1 to 1 with Y pointing donw. Same direction as screen pixles (no dont need a y flip)
+            // vulkan NDC is -1 to 1 with Y pointing down. Same direction as screen pixels (no don't need a y flip)
             float ndcX = (2.0f * (float)mouseX) / (float)fbWidth - 1.0f;
             float ndcY = (2.0f * (float)mouseY) / (float)fbHeight - 1.0f;
 
@@ -145,11 +145,11 @@ int main() {
             int gridY = (int)std::round((ndcY - originY) / cardSpacing);
 
             if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
-                // check the clikc is within the cards visible bounds
+                // check the click is within the card's visible bounds
                 float cardCenterX = originX + gridX * cardSpacing;
                 float cardCenterY = originY + gridY * cardSpacing;
 
-                // Checks if the point is within half the cards width and height from its center
+                // Checks if the point is within half the card's width and height from its center
                 if (std::abs(ndcX - cardCenterX) <= cardScale / 2.0f && std::abs(ndcY - cardCenterY) <= cardScale / 2.0f) {
 
                     FlipResult result = game.TryFlipCard(gridX, gridY);
@@ -176,7 +176,7 @@ int main() {
             }
         }
 
-        // build the quads for this frame. each card is a backround quad, plus its word as letter quads if its face up
+        // build the quads for this frame. each card is a background quad, plus its word as letter quads if it's face up
         std::vector<QuadInstance> quads;
 
         glm::vec2 white = font.GetWhitePixelUV();
@@ -199,9 +199,9 @@ int main() {
 
                 quads.push_back({ model, color, whiteRect }); // the card background
 
-                // the word goes after the background so its drawn on top of it
+                // the word goes after the background so it's drawn on top of it
                 if (card.isFaceUp) {
-                    glm::vec4 textColor(0.1f, 0.1f, 0.15f, 1.0f); // near black (contrasts prety good with the orange)
+                    glm::vec4 textColor(0.1f, 0.1f, 0.15f, 1.0f); // near black (contrasts pretty good with the orange)
                     // 0.9 leaves a small margin around the card. 0.0025 = 1 atlas pixel per screen pixel at 800px wide
                     AddTextQuads(quads, font, card.word, worldX, worldY, cardScale * 0.9f, 0.0025f, textColor);
                 }

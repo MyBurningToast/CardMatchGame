@@ -20,7 +20,7 @@ static void StoreGlyph(std::unordered_map<uint32_t, Glyph>& glyphs, const stbtt_
     glyph.x1 = quad.x1; glyph.y1 = quad.y1;
     glyph.u0 = quad.s0; glyph.v0 = quad.t0;
     glyph.u1 = quad.s1; glyph.v1 = quad.t1;
-    glyph.advance = penX; // GetPackedQuad moved the pen along by this leters width, so penX is the advance
+    glyph.advance = penX; // GetPackedQuad moved the pen along by this letter's width, so penX is the advance
 
     glyphs[codepoint] = glyph;
 }
@@ -35,23 +35,23 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     size_t fileSize = (size_t)file.tellg(); // cursor is at the end, so its position is file size in bytes
     std::vector<unsigned char> ttfData(fileSize); // buffer sized to hold the whole file
     file.seekg(0); // jump cursor back to the start
-    file.read((char*)ttfData.data(), fileSize); // read entire file into the bufer
-    file.close(); // relase the file handel
+    file.read((char*)ttfData.data(), fileSize); // read entire file into the buffer
+    file.close(); // release the file handle
 
     // the atlas starts fully black (0 means no ink)
     atlasPixels.assign((size_t)atlasWidth * atlasHeight, 0);
 
     // which characters to bake
     // range 1: printable ascii, space (32) up to ~ (126) = 95 characters in a row
-    // range 2: the macron vowels. they arnt in a single roew, so list
+    // range 2: the macron vowels. they aren't in a single row, so list
     const int asciiFirst = 32;
     const int asciiCount = 95;
     int macronCodepoints[] = { 0x0100, 0x0101, 0x0112, 0x0113, 0x012A, 0x012B, 0x014C, 0x014D, 0x016A, 0x016B };
     const int macronCount = 10;
 
-    // stb turns the ttf into one glyf atlas bitmap
+    // stb turns the ttf into one glyph atlas bitmap
     // also per glyph lookup data (atlas rect, draw offset, cursor advance)
-    // im usign one vector per codepoint range 
+    // i'm using one vector per codepoint range
     std::vector<stbtt_packedchar> asciiChars(asciiCount);
     std::vector<stbtt_packedchar> macronChars(macronCount);
 
@@ -70,8 +70,6 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     // the bottom few rows are reserved for the white square, so only let stb pack into the rows above them
     // (height is the packing area, stride is still the full width of the atlas)
 
-    // botom few rows are reserved the the white square (for drwaing the plain coloured rectangels)
-    // only let stb pack into te rows above them
     const int whiteSize = 4;
     stbtt_pack_context packContext; // stb has a packing state to know where the next glyph goes
     // atlasPixles.data() is atlas bitmap stb writes into
@@ -81,8 +79,8 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     }
 
     // rasterise every glyph in both ranges and pack them into the atlas
-    // returns 0 if any glyph didnt fit
-    int packed = stbtt_PackFontRanges(&packContext, ttfData.data(), 0, ranges, 2); 
+    // returns 0 if any glyph didn't fit
+    int packed = stbtt_PackFontRanges(&packContext, ttfData.data(), 0, ranges, 2);
     stbtt_PackEnd(&packContext);
 
     if (!packed) {
@@ -90,7 +88,7 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
         return false;
     }
 
-    // turn stbs packed characters into the glyph structs
+    // turn stb's packed characters into the glyph structs
     for (int i = 0; i < asciiCount; i++) {
         StoreGlyph(glyphs, asciiChars.data(), i, asciiFirst + i, (int)atlasWidth, (int)atlasHeight);
     }
@@ -112,13 +110,13 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     return true;
 }
 
-// look up a characters glyph by codepoint
+// look up a character's glyph by codepoint
 // a missing letter shows as '?' instead of failing, so one odd character doesn't break the whole card
 const Glyph* Font::GetGlyph(uint32_t codepoint) const {
     auto it = glyphs.find(codepoint);
     if (it == glyphs.end()) it = glyphs.find(fallbackCodepoint);
     if (it == glyphs.end()) return nullptr; // '?' is always baked, so this only happens if the font isn't loaded
-    return &it->second; // poiinter to stored glyph
+    return &it->second; // pointer to stored glyph
 }
 
 bool Font::HasGlyph(uint32_t codepoint) const {
@@ -126,7 +124,7 @@ bool Font::HasGlyph(uint32_t codepoint) const {
 }
 
 bool Font::SaveAtlasPNG(const std::string& path) const {
-    // 1 = one channel (grayscale). the last argument is the stride(how many bytes to skip to get from one row to the next))
+    // 1 = one channel (grayscale). the last argument is the stride (how many bytes to skip to get from one row to the next)
     if (!stbi_write_png(path.c_str(), (int)atlasWidth, (int)atlasHeight, 1, atlasPixels.data(), (int)atlasWidth)) {
         std::cerr << "Failed to save atlas image: " << path << "\n";
         return false;
@@ -141,37 +139,39 @@ std::vector<uint32_t> Utf8ToCodepoints(const std::string& text) {
     while (i < text.size()) {
         unsigned char c = (unsigned char)text[i];
         uint32_t codepoint;
-        int extraBytes; // how many continuation bytes folow the first byte
+        int extraBytes; // how many continuation bytes follow the first byte
 
         // REFERENCE (byte layout table): https://datatracker.ietf.org/doc/html/rfc3629#section-3
-        // WHY IS THIS ASCII STUFF SO DAMN CONFUSING!
-        // I think im going to go crazy
 
         // the first byte tells us how long the character is
         if (c < 0x80) {
-            // 0xxxxxxx: top bit is 0 (anything below 0x80), so its plain ASCII
+            // 0xxxxxxx: top bit is 0 (anything below 0x80), so it's plain ASCII
             // the byte already is the codepoint, nothing follows
             codepoint = c;
             extraBytes = 0;
-        } else if ((c >> 5) == 0x6) {
+        }
+        else if ((c >> 5) == 0x6) {
             // 110xxxxx: 2 bytes long (macron vowels are here)
             // c >> 5 drops the 5 data bits, leaving the top 3 bits; 0x6 = 110
             // c & 0x1F: 0x1F = 00011111, keeps the 5 data bits and clears the 110 tag
             codepoint = c & 0x1F;
             extraBytes = 1;
-        } else if ((c >> 4) == 0xE) {
+        }
+        else if ((c >> 4) == 0xE) {
             // 1110xxxx: 3 bytes long
             // c >> 4 leaves the top 4 bits; 0xE = 1110
             // c & 0x0F: 0x0F = 00001111, keeps the 4 data bits
             codepoint = c & 0x0F;
             extraBytes = 2;
-        } else if ((c >> 3) == 0x1E) {
+        }
+        else if ((c >> 3) == 0x1E) {
             // 11110xxx: 4 bytes long
             // c >> 3 leaves the top 5 bits; 0x1E = 11110
             // c & 0x07: 0x07 = 00000111, keeps the 3 data bits
             codepoint = c & 0x07;
             extraBytes = 3;
-        } else {
+        }
+        else {
             // not a valid first byte, skip
             i++;
             continue;

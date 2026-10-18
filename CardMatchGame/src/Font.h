@@ -11,7 +11,7 @@ Note to self:
 For checking what a font supports: https://fontdrop.info/
 
 REFERENCE FOR CODEPOINTS: https://www.unicode.org/Public/18.0.0/charts/PDF/U0000.pdf
-Macron refernce
+Macron reference
 0x0100  256 Ā
 0x0101	257 ā
 0x0112	274	Ē
@@ -26,8 +26,8 @@ Macron refernce
 
 // everything needed to draw one letter
 struct Glyph {
-    float x0, y0, x1, y1; // corners of the letters quad in pixels. relative to the pen position (on the baseline). y points down
-    float u0, v0, u1, v1; // the letters rectngle inside the atlas image (0 - 1)
+    float x0, y0, x1, y1; // corners of the letter's quad in pixels. relative to the pen position (on the baseline). y points down
+    float u0, v0, u1, v1; // the letter's rectangle inside the atlas image (0 - 1)
     float advance; // how many pixels to move the pen right after drawing this letter
 };
 
@@ -59,11 +59,11 @@ private:
     uint32_t atlasWidth = 512;
     uint32_t atlasHeight = 100;
     std::vector<uint8_t> atlasPixels;
-    std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for chars unicode number to its glyph
+    std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for char's unicode number to its glyph
     glm::vec2 whiteUV = glm::vec2(0.0f);
     static constexpr uint32_t fallbackCodepoint = '?'; // drawn in place of any letter the font doesn't have
 };
 
 // converts a utf8 string into unicode codepoints
-// so somthing like "Kākā" becomes 4 letters instead of 6 bytes (the macron letters are 2 bytes)
+// so something like "Kākā" becomes 4 letters instead of 6 bytes (the macron letters are 2 bytes)
 std::vector<uint32_t> Utf8ToCodepoints(const std::string& text);
