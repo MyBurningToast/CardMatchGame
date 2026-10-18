@@ -196,7 +196,6 @@ int main() {
                 if (card.isFaceUp) {
                     glm::vec4 textColor(0.1f, 0.1f, 0.15f, 1.0f); // near black (contrasts prety good with the orange)
                     // 0.9 leaves a small margin around the card. 0.0025 = 1 atlas pixel per screen pixel at 800px wide
-                    // TODO: support differnt window size. Actualy maybe not, getting just this stupid shit to work is absolute torture (i hate trying to render text)
                     AddTextQuads(quads, font, card.word, worldX, worldY, cardScale * 0.9f, 0.0025f, textColor);
                 }
             }
