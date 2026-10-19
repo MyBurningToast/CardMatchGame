@@ -28,7 +28,7 @@ static std::string FormatCodepoint(uint32_t codepoint) {
     return stream.str();
 }
 
-bool LoadWordPairs(const std::string& path, const Font& font, size_t minPairs, std::vector<WordPair>& outPairs, std::string& errorMessage) {
+bool LoadWordPairs(const std::string& path, const Font& font, size_t requiredPairs, std::vector<WordPair>& outPairs, std::string& errorMessage) {
     std::ifstream file(path);
     if (!file.is_open()) {
         errorMessage = "Could not open the word list file: " + path;
@@ -78,13 +78,9 @@ bool LoadWordPairs(const std::string& path, const Font& font, size_t minPairs, s
         pairs.push_back(pair);
     }
 
-    if (pairs.empty()) {
-        errorMessage = "The word list file has no word pairs in it: " + path;
-        return false;
-    }
-
-    if (pairs.size() < minPairs) {
-        errorMessage = "The word list needs at least " + std::to_string(minPairs) + " word pairs, but " + path + " only has " + std::to_string(pairs.size());
+    // the grid needs exactly this many. too few can't fill it, too many would leave words unused
+    if (pairs.size() != requiredPairs) {
+        errorMessage = "The word list needs exactly " + std::to_string(requiredPairs) + " word pairs, but " + path + " has " + std::to_string(pairs.size());
         return false;
     }
 
