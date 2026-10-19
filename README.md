@@ -42,7 +42,7 @@ Get the latest build from [Releases](../../releases).
 1. Install the requirements.
 2. Extract GLFW to `C:\libs\glfw-3.5.1.bin.WIN64` and GLM to `C:\libs\glm`, or update `GLFW_DIR` and `GLM_DIR` in `CMakeLists.txt`.
 3. Open the `CardMatchGame` folder in Visual Studio.
-4. Select the x64 Debug or Release preset and build. (you may need to set `CMakeLists.txt` as startup item in visual studio)
+4. Select the x64 Debug or Release preset and build (you may need to set `CMakeLists.txt` as startup item in visual studio).
 5. Run `CardMatchGame.exe` from the build folder.
 
 ## Word List
