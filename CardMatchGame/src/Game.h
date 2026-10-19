@@ -53,8 +53,9 @@ private:
 
     int moves = 0; // one move means flipping two cards and checking them
 
-    int firstX = -1, firstY = -1;
-    int secondX = -1, secondY = -1;
+    static constexpr int noCard = -1; // means no card selected
+    int firstX = noCard, firstY = noCard;
+    int secondX = noCard, secondY = noCard;
     bool hasPendingPair = false;
 
     // private because only Game should be able to modify cards directly

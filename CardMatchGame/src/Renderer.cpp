@@ -3,6 +3,21 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
+#include <iterator>
+
+constexpr int windowWidth = 800; // main.cpp's cardTextScale assumes 800px wide
+constexpr int windowHeight = 800;
+constexpr const char* windowTitle = "Card Match Game";
+constexpr const char* appName = "Card Match Game";
+constexpr const char* engineName = "No Engine";
+constexpr uint32_t appVersion = VK_MAKE_VERSION(1, 0, 0);
+constexpr uint32_t desiredSwapchainImageCount = 2; // double buffering
+constexpr uint32_t vertexAttributeCount = 2; // pos and uv
+constexpr const char* vertShaderPath = "shaders/vert.spv";
+constexpr const char* fragShaderPath = "shaders/frag.spv";
+constexpr const char* shaderEntryPoint = "main"; // the function name in the glsl files
+constexpr float quadHalfSize = 0.5f; // the shared quad is 1x1, centered on the origin
+constexpr VkClearColorValue backgroundColor = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // black
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation" // comes with vulkan SDK
@@ -66,10 +81,10 @@ tells the gpu which descriptor set (and therefore which buffer) to use for this 
 
 // in Vulkan's NDC (Normalized Device Coordinates)/screen space, positive Y points downward
 const std::vector<Vertex> vertices = {
-    { { -0.5f, -0.5f },{ 0.0f, 0.0f } }, // top left
-    { { 0.5f, -0.5f },{ 1.0f, 0.0f } }, // top right
-    { { 0.5f,  0.5f },{ 1.0f, 1.0f } }, // bottom right
-    { { -0.5f,  0.5f },{ 0.0f, 1.0f } }, // bottom left
+    { { -quadHalfSize, -quadHalfSize },{ 0.0f, 0.0f } }, // top left
+    { { quadHalfSize, -quadHalfSize },{ 1.0f, 0.0f } }, // top right
+    { { quadHalfSize,  quadHalfSize },{ 1.0f, 1.0f } }, // bottom right
+    { { -quadHalfSize,  quadHalfSize },{ 0.0f, 1.0f } }, // bottom left
 };
 
 // index buffer data
@@ -135,34 +150,34 @@ int Renderer::InitWindow() {
     // check glfw initializes
     if (!glfwInit()) {
         std::cerr << "Failed to init GLFW\n";
-        return -1; // in c++ a non zero return value is considered an error
+        return renderFailed; // in c++ a non zero return value is considered an error
     }
 
     if (enableValidationLayers && !CheckValidationLayerSupport(validationLayers)) {
         std::cerr << "Validation layers requested but not available\n";
-        return -1;
+        return renderFailed;
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // specify no OpenGL context because i'm using Vulkan
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // fixed size window, so the swapchain never needs rebuilding
-    window = glfwCreateWindow(800, 800, "Test", nullptr, nullptr);
+    window = glfwCreateWindow(windowWidth, windowHeight, windowTitle, nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
-        return -1;
+        return renderFailed;
     }
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateInstance() {
     // Vulkan check
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "test";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "no engine";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pApplicationName = appName;
+    appInfo.applicationVersion = appVersion;
+    appInfo.pEngineName = engineName;
+    appInfo.engineVersion = appVersion;
     appInfo.apiVersion = VK_API_VERSION_1_0;
 
     // GLFW extensions
@@ -187,10 +202,10 @@ int Renderer::CreateInstance() {
         std::cerr << "Failed to create Vulkan instance " << result << "\n";
         glfwDestroyWindow(window);
         glfwTerminate();
-        return -1;
+        return renderFailed;
     }
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateSurface() {
@@ -198,12 +213,12 @@ int Renderer::CreateSurface() {
     VkResult surfaceResult = glfwCreateWindowSurface(instance, window, nullptr, &surface); // glfw can do this automatically based on operating system & graphics api
     if (surfaceResult != VK_SUCCESS) {
         std::cerr << "Failed to create window surface\n";
-        return -1;
+        return renderFailed;
 
     }
     std::cout << "Window surface created\n";
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::PickPhysicalDevice() {
@@ -212,7 +227,7 @@ int Renderer::PickPhysicalDevice() {
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr); // vulkan will count all the gpus that support it
     if (deviceCount == 0) { // couldn't find a compatible gpu
         std::cerr << "No GPU with Vulkan support\n";
-        return -1;
+        return renderFailed;
     }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -255,14 +270,14 @@ int Renderer::PickPhysicalDevice() {
 
     if (physicalDevice == VK_NULL_HANDLE) {
         std::cerr << "No GPU with graphics support found\n";
-        return -1;
+        return renderFailed;
     }
 
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
     std::cout << "Using GPU: " << deviceProps.deviceName << "\n";
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateLogicalDevice() {
@@ -299,10 +314,10 @@ int Renderer::CreateLogicalDevice() {
 
     if (deviceResult != VK_SUCCESS) {
         std::cerr << "Failed to create logical device\n";
-        return -1;
+        return renderFailed;
     }
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateSwapchain() {
@@ -322,7 +337,7 @@ int Renderer::CreateSwapchain() {
 
     // how many images to put in the swapchain
     // I'm using double buffering here so that CPU can work on the next frame while the previous one is still being rendered
-    uint32_t imageCount = 2;
+    uint32_t imageCount = desiredSwapchainImageCount;
     if (imageCount < capabilities.minImageCount) {
         imageCount = capabilities.minImageCount; // if minimum is higher, set it to that minimum
     }
@@ -345,7 +360,7 @@ int Renderer::CreateSwapchain() {
     VkResult swapchainResult = vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain);
     if (swapchainResult != VK_SUCCESS) {
         std::cerr << "Failed to create swapchain\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Swapchain created with " << imageCount << " images\n";
@@ -356,7 +371,7 @@ int Renderer::CreateSwapchain() {
     // We only specify a minimum count and it may have created more
     vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data());
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateImageViews() {
@@ -387,14 +402,14 @@ int Renderer::CreateImageViews() {
         VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &swapchainImageViews[i]);
         if (viewResult != VK_SUCCESS) {
             std::cerr << "Failed to create image view " << i << "\n";
-            return -1;
+            return renderFailed;
         }
 
     }
 
     std::cout << "Created " << swapchainImageViews.size() << " image views\n";
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateRenderPass() {
@@ -449,19 +464,19 @@ int Renderer::CreateRenderPass() {
     VkResult renderPassResult = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
     if (renderPassResult != VK_SUCCESS) {
         std::cerr << "Failed to create render pass\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Render pass created\n";
 
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateGraphicsPipeline() {
     // load shaders
 
-    std::vector<char> vertShaderCode = ReadFile("shaders/vert.spv");
-    std::vector<char> fragShaderCode = ReadFile("shaders/frag.spv");
+    std::vector<char> vertShaderCode = ReadFile(vertShaderPath);
+    std::vector<char> fragShaderCode = ReadFile(fragShaderPath);
 
     VkShaderModule vertShaderModule = CreateShaderModule(device, vertShaderCode);
     VkShaderModule fragShaderModule = CreateShaderModule(device, fragShaderCode);
@@ -471,13 +486,13 @@ int Renderer::CreateGraphicsPipeline() {
     vertStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vertStageInfo.module = vertShaderModule;
-    vertStageInfo.pName = "main"; // the function name in the glsl file
+    vertStageInfo.pName = shaderEntryPoint; // the function name in the glsl file
 
     VkPipelineShaderStageCreateInfo fragStageInfo{};
     fragStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     fragStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragStageInfo.module = fragShaderModule;
-    fragStageInfo.pName = "main";
+    fragStageInfo.pName = shaderEntryPoint;
 
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {
@@ -492,7 +507,7 @@ int Renderer::CreateGraphicsPipeline() {
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // go to next vertex's data for every vertex processed
 
     // one description per field in the Vertex struct (pos and uv)
-    VkVertexInputAttributeDescription attributeDescriptions[2]{};
+    VkVertexInputAttributeDescription attributeDescriptions[vertexAttributeCount]{};
 
     attributeDescriptions[0].binding = 0; // which binding (vertex buffer stream) this attribute's data comes from. matches the binding description
     attributeDescriptions[0].location = 0; // matches location = 0 in the vertex shader (inPosition)
@@ -510,7 +525,7 @@ int Renderer::CreateGraphicsPipeline() {
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = 2; // pos and uv
+    vertexInputInfo.vertexAttributeDescriptionCount = vertexAttributeCount; // pos and uv
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions;
 
     // input assembly is how vertices are grouped into shapes
@@ -593,13 +608,13 @@ int Renderer::CreateGraphicsPipeline() {
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         std::cerr << "Failed to create pipeline layout\n";
-        return -1;
+        return renderFailed;
     }
 
     // now combine all of this into a pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2; // only have vertex and fragment shader
+    pipelineInfo.stageCount = (uint32_t)std::size(shaderStages); // vertex and fragment shader
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -615,7 +630,7 @@ int Renderer::CreateGraphicsPipeline() {
 
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
         std::cerr << "Failed to create graphics pipeline\n";
-        return -1;
+        return renderFailed;
     }
 
     // shader modules are only needed to build the pipeline
@@ -623,7 +638,7 @@ int Renderer::CreateGraphicsPipeline() {
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
     std::cout << "Graphics pipeline created\n";
 
-    return 0;
+    return renderOk;
 }
 
 void Renderer::GetGraphicsQueue() {
@@ -653,12 +668,12 @@ int Renderer::CreateFramebuffers() {
 
         if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapchainFramebuffers[i]) != VK_SUCCESS) {
             std::cerr << "Failed to create framebuffer " << i << "\n";
-            return -1;
+            return renderFailed;
         }
     }
 
     std::cout << "Created " << swapchainFramebuffers.size() << " framebuffers\n";
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateCommandBuffer() {
@@ -672,11 +687,11 @@ int Renderer::CreateCommandBuffer() {
 
     if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
         std::cerr << "Failed to allocate command buffer\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Command buffer allocated\n";
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateCommandPool() {
@@ -689,11 +704,11 @@ int Renderer::CreateCommandPool() {
 
     if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
         std::cerr << "Failed to create command pool\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Command pool created\n";
-    return 0;
+    return renderOk;
 }
 
 // needed to coordinate work between cpu and gpu because they run in parallel and at very different speeds
@@ -711,7 +726,7 @@ int Renderer::CreateSyncObjects() {
     if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
         vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
         std::cerr << "Failed to create sync objects\n";
-        return -1;
+        return renderFailed;
     }
 
     // one semaphore per swapchain image to say when render is finished
@@ -720,12 +735,12 @@ int Renderer::CreateSyncObjects() {
     for (size_t i = 0; i < renderFinishedSemaphores.size(); i++) {
         if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS) {
             std::cerr << "Failed to create render finished semaphore " << i << "\n";
-            return -1;
+            return renderFailed;
         }
     }
 
     std::cout << "Sync objects created\n";
-    return 0;
+    return renderOk;
 }
 
 // records the draw commands into the command buffer, targeting a specific framebuffer
@@ -739,7 +754,8 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmdBuffer, uint32_t imageInde
 
     // what value to reset an attachment to at the start of a render pass
     // when the attachments loadOp is VK_ATTACHMENT_LOAD_OP_CLEAR
-    VkClearValue clearColor = { { { 0.0f, 0.0f, 0.0f, 1.0f } } }; // clear to black
+    VkClearValue clearColor{};
+    clearColor.color = backgroundColor; // clear to black
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1054,11 +1070,11 @@ int Renderer::CreateTexture(const std::vector<uint8_t>& pixels, uint32_t texWidt
 
     if (vkCreateImageView(device, &viewInfo, nullptr, &textureImageView) != VK_SUCCESS) {
         std::cerr << "Failed to create texture image view\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Texture created\n";
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateTextureSampler() {
@@ -1081,11 +1097,11 @@ int Renderer::CreateTextureSampler() {
 
     if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
         std::cerr << "Failed to create texture sampler\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Texture sampler created\n";
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateDescriptorSetLayout() {
@@ -1103,11 +1119,11 @@ int Renderer::CreateDescriptorSetLayout() {
 
     if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
         std::cerr << "Failed to create descriptor set layout\n";
-        return -1;
+        return renderFailed;
     }
 
     std::cout << "Descriptor set layout created\n";
-    return 0;
+    return renderOk;
 }
 
 int Renderer::CreateDescriptorPoolAndSet() {
@@ -1124,7 +1140,7 @@ int Renderer::CreateDescriptorPoolAndSet() {
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
         std::cerr << "Failed to create descriptor pool\n";
-        return -1;
+        return renderFailed;
     }
 
     // allocate one set from the pool, using our layout
@@ -1136,7 +1152,7 @@ int Renderer::CreateDescriptorPoolAndSet() {
 
     if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
         std::cerr << "Failed to allocate descriptor set\n";
-        return -1;
+        return renderFailed;
     }
 
     // the set exists but is empty. point binding 0 to the actual image view + sampler
@@ -1157,7 +1173,7 @@ int Renderer::CreateDescriptorPoolAndSet() {
     vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
     std::cout << "Descriptor pool and set created\n";
-    return 0;
+    return renderOk;
 }
 
 
@@ -1186,29 +1202,29 @@ void Renderer::CleanupSwapchain() {
 }
 
 int Renderer::Init(const std::vector<uint8_t>& texturePixels, uint32_t texWidth, uint32_t texHeight) {
-    if (InitWindow() != 0) return -1;
-    if (CreateInstance() != 0) return -1;
-    if (CreateSurface() != 0) return -1;
-    if (PickPhysicalDevice() != 0) return -1;
-    if (CreateLogicalDevice() != 0) return -1;
-    if (CreateSwapchain() != 0) return -1;
-    if (CreateImageViews() != 0) return -1;
-    if (CreateRenderPass() != 0) return -1;
-    if (CreateDescriptorSetLayout() != 0) return -1;
-    if (CreateGraphicsPipeline() != 0) return -1;
+    if (InitWindow() != renderOk) return renderFailed;
+    if (CreateInstance() != renderOk) return renderFailed;
+    if (CreateSurface() != renderOk) return renderFailed;
+    if (PickPhysicalDevice() != renderOk) return renderFailed;
+    if (CreateLogicalDevice() != renderOk) return renderFailed;
+    if (CreateSwapchain() != renderOk) return renderFailed;
+    if (CreateImageViews() != renderOk) return renderFailed;
+    if (CreateRenderPass() != renderOk) return renderFailed;
+    if (CreateDescriptorSetLayout() != renderOk) return renderFailed;
+    if (CreateGraphicsPipeline() != renderOk) return renderFailed;
     GetGraphicsQueue();
-    if (CreateFramebuffers() != 0) return -1;
-    if (CreateCommandPool() != 0) return -1;
-    if (CreateCommandBuffer() != 0) return -1;
-    if (CreateSyncObjects() != 0) return -1;
+    if (CreateFramebuffers() != renderOk) return renderFailed;
+    if (CreateCommandPool() != renderOk) return renderFailed;
+    if (CreateCommandBuffer() != renderOk) return renderFailed;
+    if (CreateSyncObjects() != renderOk) return renderFailed;
     CreateVertexBuffer();
     CreateIndexBuffer();
 
-    if (CreateTexture(texturePixels, texWidth, texHeight) != 0) return -1;
-    if (CreateTextureSampler() != 0) return -1;
-    if (CreateDescriptorPoolAndSet() != 0) return -1;
+    if (CreateTexture(texturePixels, texWidth, texHeight) != renderOk) return renderFailed;
+    if (CreateTextureSampler() != renderOk) return renderFailed;
+    if (CreateDescriptorPoolAndSet() != renderOk) return renderFailed;
 
-    return 0;
+    return renderOk;
 }
 
 

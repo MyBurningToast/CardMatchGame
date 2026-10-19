@@ -2,6 +2,9 @@
 #include <algorithm>
 #include <random>
 
+constexpr int minGridSize = 1; // smallest allowed grid width or height
+constexpr int cardsPerPair = 2; // one maori card and one english card
+
 // returns a mutable reference to the card at (x, y)
 // the grid is stored as a flat 1D vector in row major order
 // so the index is row * width + column
@@ -17,20 +20,20 @@ const CardData& Game::GetCard(int x, int y) const {
 // builds and shuffles a new grid of cards from the given word pairs
 bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int gridHeight, std::string& errorMessage) {
     // a grid with no cards can't be played, and would count as already complete
-    if (gridWidth <= 0 || gridHeight <= 0) {
-        errorMessage = "Grid size must be at least 1x1, but it was " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight);
+    if (gridWidth < minGridSize || gridHeight < minGridSize) {
+        errorMessage = "Grid size must be at least " + std::to_string(minGridSize) + "x" + std::to_string(minGridSize) + ", but it was " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight);
         return false;
     }
 
     int cardCount = gridWidth * gridHeight;
 
     // can't have an odd number of cards
-    if (cardCount % 2 != 0) {
+    if (cardCount % cardsPerPair != 0) {
         errorMessage = "A " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight) + " grid has " + std::to_string(cardCount) + " cards. Cards come in pairs, so the total must be even";
         return false;
     }
 
-    int pairsNeeded = cardCount / 2;
+    int pairsNeeded = cardCount / cardsPerPair;
     if ((int)wordPairs.size() < pairsNeeded) { // not enough words to fill the grid
         errorMessage = "A " + std::to_string(gridWidth) + "x" + std::to_string(gridHeight) + " grid needs " + std::to_string(pairsNeeded) + " word pairs, but only " + std::to_string(wordPairs.size()) + " were given";
         return false;
@@ -59,8 +62,8 @@ bool Game::BuildGrid(const std::vector<WordPair>& wordPairs, int gridWidth, int 
     grid = std::move(newCards);
 
     // -1 means no card selected
-    firstX = -1; firstY = -1;
-    secondX = -1; secondY = -1;
+    firstX = noCard; firstY = noCard;
+    secondX = noCard; secondY = noCard;
     hasPendingPair = false; // not currently waiting on a match check
     moves = 0;
 
@@ -87,7 +90,7 @@ FlipResult Game::TryFlipCard(int x, int y) {
     card.isFaceUp = true; // valid flip
 
     // -1 means no card selected (this is the first flip)
-    if (firstX == -1) {
+    if (firstX == noCard) {
         firstX = x;
         firstY = y;
         return FlipResult::Flipped;
@@ -121,8 +124,8 @@ bool Game::CheckPair() {
     }
 
     // reset back to -1 (none selected)
-    firstX = -1; firstY = -1;
-    secondX = -1; secondY = -1;
+    firstX = noCard; firstY = noCard;
+    secondX = noCard; secondY = noCard;
     hasPendingPair = false;
 
     return isMatch;

@@ -8,6 +8,10 @@
 #include <vector>
 #include <string>
 
+// return codes for the renderer's setup functions
+inline constexpr int renderOk = 0;
+inline constexpr int renderFailed = -1;
+
 // This is the data for a single vertex. For now only stores position
 struct Vertex {
     glm::vec2 pos;
@@ -19,11 +23,11 @@ struct QuadInstance {
     glm::mat4 model; // position / scale / rotation
     glm::vec4 color; // RGBA (each 0.0 - 1.0)
     glm::vec4 uvRect; // (u0, v0, u1, v1) the atlas rectangle this quad shows (one letter)
-};  
+};
 
 class Renderer {
 public:
-    // runs every vulkan setup step in order. returns -1 on failure
+    // runs every vulkan setup step in order. returns renderFailed on failure
     // uploads the 1 byte per pixel font atlas to the gpu as the one texture all quads sample from
     int Init(const std::vector<uint8_t>& texturePixels, uint32_t texWidth, uint32_t texHeight);
 

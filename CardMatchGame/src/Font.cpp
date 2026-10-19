@@ -7,13 +7,30 @@
 
 #include <fstream>
 #include <iostream>
+#include <iterator>
+
+constexpr float half = 0.5f;
+constexpr int oneByteExtra = 0, twoByteExtra = 1, threeByteExtra = 2, fourByteExtra = 3; // bytes after the first one (0 for plain ascii)
+constexpr int rangeCount = 2; // ascii range + macron list
+constexpr int atlasPadding = 1; // pixels between packed glyphs
+constexpr int fontIndex = 0; // first font in the .ttf file
+constexpr int alignToInteger = 0; // false: keep glyph positions fractional
+constexpr unsigned char solidPixel = 255; // fully opaque atlas pixel
+
+// UTF-8 byte layout (RFC 3629): the first byte has a tag saying how long the character is, the rest of its bits are data
+constexpr unsigned char asciiLimit = 0x80; // bytes below this are plain ASCII
+constexpr int twoByteTagShift = 5;   constexpr unsigned char twoByteTag = 0x6;   constexpr unsigned char twoByteDataMask = 0x1F; // 110xxxxx
+constexpr int threeByteTagShift = 4; constexpr unsigned char threeByteTag = 0xE; constexpr unsigned char threeByteDataMask = 0x0F; // 1110xxxx
+constexpr int fourByteTagShift = 3;  constexpr unsigned char fourByteTag = 0x1E; constexpr unsigned char fourByteDataMask = 0x07; // 11110xxx
+constexpr int continuationBits = 6; // each continuation byte (10xxxxxx) adds 6 bits
+constexpr unsigned char continuationDataMask = 0x3F;
 
 // converts one of the packed characters into our own Glyph struct and stores it
 static void StoreGlyph(std::unordered_map<uint32_t, Glyph>& glyphs, const stbtt_packedchar* chars, int index, uint32_t codepoint, int atlasW, int atlasH) {
     float penX = 0.0f; // start the pen at (0,0) so the quad comes back relative to the pen
     float penY = 0.0f;
     stbtt_aligned_quad quad;
-    stbtt_GetPackedQuad(chars, atlasW, atlasH, index, &penX, &penY, &quad, 0);
+    stbtt_GetPackedQuad(chars, atlasW, atlasH, index, &penX, &penY, &quad, alignToInteger);
 
     Glyph glyph;
     glyph.x0 = quad.x0; glyph.y0 = quad.y0;
@@ -45,9 +62,10 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     // range 1: printable ascii, space (32) up to ~ (126) = 95 characters in a row
     // range 2: the macron vowels. they aren't in a single row, so list
     const int asciiFirst = 32;
-    const int asciiCount = 95;
+    const int asciiLast = '~';
+    const int asciiCount = asciiLast - asciiFirst + 1;
     int macronCodepoints[] = { 0x0100, 0x0101, 0x0112, 0x0113, 0x012A, 0x012B, 0x014C, 0x014D, 0x016A, 0x016B };
-    const int macronCount = 10;
+    const int macronCount = (int)std::size(macronCodepoints);
 
     // stb turns the ttf into one glyph atlas bitmap
     // also per glyph lookup data (atlas rect, draw offset, cursor advance)
@@ -55,7 +73,7 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     std::vector<stbtt_packedchar> asciiChars(asciiCount);
     std::vector<stbtt_packedchar> macronChars(macronCount);
 
-    stbtt_pack_range ranges[2]{}; // one entry per codepoint range to pack into the atlas
+    stbtt_pack_range ranges[rangeCount]{}; // one entry per codepoint range to pack into the atlas
     ranges[0].font_size = pixelHeight;
     ranges[0].first_unicode_codepoint_in_range = asciiFirst; // contiguous range, starts here and goes for num_chars
     ranges[0].array_of_unicode_codepoints = nullptr; // null means using contiguous range above
@@ -73,14 +91,14 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     const int whiteSize = 4;
     stbtt_pack_context packContext; // stb has a packing state to know where the next glyph goes
     // atlasPixles.data() is atlas bitmap stb writes into
-    if (!stbtt_PackBegin(&packContext, atlasPixels.data(), (int)atlasWidth, (int)atlasHeight - whiteSize, (int)atlasWidth, 1, nullptr)) {
+    if (!stbtt_PackBegin(&packContext, atlasPixels.data(), (int)atlasWidth, (int)atlasHeight - whiteSize, (int)atlasWidth, atlasPadding, nullptr)) {
         std::cerr << "Failed to start packing the font atlas\n";
         return false;
     }
 
     // rasterise every glyph in both ranges and pack them into the atlas
     // returns 0 if any glyph didn't fit
-    int packed = stbtt_PackFontRanges(&packContext, ttfData.data(), 0, ranges, 2);
+    int packed = stbtt_PackFontRanges(&packContext, ttfData.data(), fontIndex, ranges, rangeCount);
     stbtt_PackEnd(&packContext);
 
     if (!packed) {
@@ -99,12 +117,12 @@ bool Font::Load(const std::string& ttfPath, float pixelHeight) {
     // draw the solid white square in the reserved strip at the bottom left
     for (uint32_t y = atlasHeight - whiteSize; y < atlasHeight; y++) {
         for (uint32_t x = 0; x < (uint32_t)whiteSize; x++) {
-            atlasPixels[y * atlasWidth + x] = 255;
+            atlasPixels[y * atlasWidth + x] = solidPixel;
         }
     }
     // uv of the centre of the white block at the bottom of the atlas
     // sample here for solid colour quads
-    whiteUV = glm::vec2((whiteSize / 2.0f) / atlasWidth, (atlasHeight - whiteSize / 2.0f) / atlasHeight);
+    whiteUV = glm::vec2((whiteSize * half) / atlasWidth, (atlasHeight - whiteSize * half) / atlasHeight);
 
     std::cout << "Font loaded: " << glyphs.size() << " glyphs baked\n";
     return true;
@@ -144,32 +162,32 @@ std::vector<uint32_t> Utf8ToCodepoints(const std::string& text) {
         // REFERENCE (byte layout table): https://datatracker.ietf.org/doc/html/rfc3629#section-3
 
         // the first byte tells us how long the character is
-        if (c < 0x80) {
+        if (c < asciiLimit) {
             // 0xxxxxxx: top bit is 0 (anything below 0x80), so it's plain ASCII
             // the byte already is the codepoint, nothing follows
             codepoint = c;
-            extraBytes = 0;
+            extraBytes = oneByteExtra;
         }
-        else if ((c >> 5) == 0x6) {
+        else if ((c >> twoByteTagShift) == twoByteTag) {
             // 110xxxxx: 2 bytes long (macron vowels are here)
             // c >> 5 drops the 5 data bits, leaving the top 3 bits; 0x6 = 110
             // c & 0x1F: 0x1F = 00011111, keeps the 5 data bits and clears the 110 tag
-            codepoint = c & 0x1F;
-            extraBytes = 1;
+            codepoint = c & twoByteDataMask;
+            extraBytes = twoByteExtra;
         }
-        else if ((c >> 4) == 0xE) {
+        else if ((c >> threeByteTagShift) == threeByteTag) {
             // 1110xxxx: 3 bytes long
             // c >> 4 leaves the top 4 bits; 0xE = 1110
             // c & 0x0F: 0x0F = 00001111, keeps the 4 data bits
-            codepoint = c & 0x0F;
-            extraBytes = 2;
+            codepoint = c & threeByteDataMask;
+            extraBytes = threeByteExtra;
         }
-        else if ((c >> 3) == 0x1E) {
+        else if ((c >> fourByteTagShift) == fourByteTag) {
             // 11110xxx: 4 bytes long
             // c >> 3 leaves the top 5 bits; 0x1E = 11110
             // c & 0x07: 0x07 = 00000111, keeps the 3 data bits
-            codepoint = c & 0x07;
-            extraBytes = 3;
+            codepoint = c & fourByteDataMask;
+            extraBytes = fourByteExtra;
         }
         else {
             // not a valid first byte, skip
@@ -183,7 +201,7 @@ std::vector<uint32_t> Utf8ToCodepoints(const std::string& text) {
         for (int k = 1; k <= extraBytes; k++) {
             // shift what we have left by 6 bits
             // 0x3F = 00111111: keep the 6 data bits, drop the 10 tag, and append them
-            codepoint = (codepoint << 6) | ((unsigned char)text[i + k] & 0x3F);
+            codepoint = (codepoint << continuationBits) | ((unsigned char)text[i + k] & continuationDataMask);
         }
 
         codepoints.push_back(codepoint);

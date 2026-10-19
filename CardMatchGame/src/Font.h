@@ -56,8 +56,10 @@ public:
     bool SaveAtlasPNG(const std::string& path) const;
 
 private:
-    uint32_t atlasWidth = 512;
-    uint32_t atlasHeight = 100;
+    static constexpr uint32_t defaultAtlasWidth = 512;
+    static constexpr uint32_t defaultAtlasHeight = 100;
+    uint32_t atlasWidth = defaultAtlasWidth;
+    uint32_t atlasHeight = defaultAtlasHeight;
     std::vector<uint8_t> atlasPixels;
     std::unordered_map<uint32_t, Glyph> glyphs; // lookup table for char's unicode number to its glyph
     glm::vec2 whiteUV = glm::vec2(0.0f);
