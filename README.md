@@ -1,22 +1,57 @@
-## Setup (Windows only)
+# CardMatchGame (School project)
 
-**Dependencies**
-1. Visual Studio 2022 with "Desktop development with C++" workload
-2. CMake 3.8+ (Already comes with Visual Studio)
-3. [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
-4. [GLFW (64-bit Windows binaries)](https://www.glfw.org/download)
-5. [GLM](https://github.com/g-truc/glm)
+A little memory game I made in C++20 using Vulkan. The goal is to match Māori words with their English tranlations.
 
-**Setup**
-- Install Vulkan SDK (installer sets `VULKAN_SDK` env variable automatically)
-- Unzip GLFW to `C:\libs\glfw-3.5.1.bin.WIN64`
-- Unzip GLM to `C:\libs\glm`
-- If using different folders, change the `GLFW_DIR` and `GLM_DIR` paths in `CMakeLists.txt`
+## Download
 
-## Controls
-- Left click: flip a card
-- R: restart with a new shuffle
-- Escape: quit
+Get the latest build from [Releases](../../releases).
 
-## Current Progress
-Very minimal game loop. Cards render their text from the word list in `assets/words.txt`.
+## How to Play
+
+- Click two cards to flip them over
+- Match a Māori word with its English translation
+- Wrong pairs flip back after a short delay
+- Match every pair to win
+
+### Controls
+
+- Left click to flip cards
+- `R` to restart
+- `Esc` to quit
+
+## Features
+
+- 4x4 grid of cards
+- Te reo Māori words, including macrons
+- Shuffled cards each game
+- Move counter and win screen
+- Words loaded from a text file
+
+### Requirements
+
+- Windows 10/11
+- Visual Studio 2022/2026 with the C++ workload
+- CMake 3.21+
+- [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
+- [GLFW 3.5.1](https://www.glfw.org/download)
+- [GLM](https://github.com/g-truc/glm)
+
+### Building
+
+1. Install the requirements.
+2. Extract GLFW to `C:\libs\glfw-3.5.1.bin.WIN64` and GLM to `C:\libs\glm`, or update `GLFW_DIR` and `GLM_DIR` in `CMakeLists.txt`
+3. Open the `CardMatchGame` folder in Visual Studio
+4. Select the x64 Debug or Release preset and build
+5. Run `CardMatchGame.exe` from the build folder
+
+## Word List
+
+The words are stored in assets/words.txt, with one pair per line
+
+The default grid needs 8 pairs. The game checks the file for errors when it loads
+
+## Credits
+
+- [Roboto](https://github.com/googlefonts/roboto-classic) – Font
+- [stb](https://github.com/nothings/stb) – Utility libraries
+- [GLFW](https://www.glfw.org/), [GLM](https://github.com/g-truc/glm) and the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
