@@ -9,3 +9,4 @@
 // blank lines are ignored
 // returns false and fills errorMessage if the file is missing, a line is malformed, there aren't exactly requiredPairs pairs, or a word uses a character the font can't draw
 bool LoadWordPairs(const std::string& path, const Font& font, size_t requiredPairs, std::vector<WordPair>& outPairs, std::string& errorMessage);
+// TODO: have no maximum and instead, shuffle the word list BEFORE selecting the first 8 pairs to put on the grid
