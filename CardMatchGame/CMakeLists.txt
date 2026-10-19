@@ -57,6 +57,13 @@ if(MSVC) # gcc and clang already default to utf-8
     )
 endif()
 
+if(MSVC)
+    target_link_options(CardMatchGame PRIVATE
+        "$<$<CONFIG:Release>:/SUBSYSTEM:WINDOWS>" # Prevents Windows from creating a console window
+        "$<$<CONFIG:Release>:/ENTRY:mainCRTStartup>" # Tells the linker to use the C++ runtime startup function that calls main()
+    )
+endif()
+
 # compile shaders
 # vulkan can't read shader source directly, it needs precompiled bytecode called SPIR-V
 # the vulkan sdk has a built in tool for this
