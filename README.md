@@ -48,7 +48,23 @@ Get the latest build from [Releases](../../releases).
 
 The words are stored in assets/words.txt, with one pair per line
 
-The default grid needs 8 pairs. The game checks the file for errors when it loads
+```text
+kurī,dog
+manu,bird
+whānau,family
+```
+
+The default grid needs 8 pairs. The game checks the file for errors when it loads.
+
+## Project Structure
+
+- `main.cpp` – Main game loop and input
+- `Game.cpp` – Game logic
+- `WordList.cpp` – Loads the words
+- `Font.cpp` – Handles fonts and text
+- `Renderer.cpp` – Vulkan rendering
+- `assets/` – Words and fonts
+- `shaders/` – Graphics shaders
 
 ## Credits
 
