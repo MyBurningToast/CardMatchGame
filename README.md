@@ -8,10 +8,10 @@ Get the latest build from [Releases](../../releases).
 
 ## How to Play
 
-- Click two cards to flip them over
-- Match a Māori word with its English translation
-- Wrong pairs flip back after a short delay
-- Match every pair to win
+- Click two cards to flip them over.
+- Match a Māori word with its English translation.
+- Wrong pairs flip back after a short delay.
+- Match every pair to win!
 
 ### Controls
 
@@ -27,6 +27,7 @@ Get the latest build from [Releases](../../releases).
 - Move counter and win screen
 - Words loaded from a text file
 
+## Building from Source
 ### Requirements
 
 - Windows 10/11
@@ -39,14 +40,14 @@ Get the latest build from [Releases](../../releases).
 ### Building
 
 1. Install the requirements.
-2. Extract GLFW to `C:\libs\glfw-3.5.1.bin.WIN64` and GLM to `C:\libs\glm`, or update `GLFW_DIR` and `GLM_DIR` in `CMakeLists.txt`
-3. Open the `CardMatchGame` folder in Visual Studio
-4. Select the x64 Debug or Release preset and build
-5. Run `CardMatchGame.exe` from the build folder
+2. Extract GLFW to `C:\libs\glfw-3.5.1.bin.WIN64` and GLM to `C:\libs\glm`, or update `GLFW_DIR` and `GLM_DIR` in `CMakeLists.txt`.
+3. Open the `CardMatchGame` folder in Visual Studio.
+4. Select the x64 Debug or Release preset and build.
+5. Run `CardMatchGame.exe` from the build folder.
 
 ## Word List
 
-The words are stored in assets/words.txt, with one pair per line
+The words are stored in `assets/words.txt`, with one pair per line:
 
 ```text
 kurī,dog
