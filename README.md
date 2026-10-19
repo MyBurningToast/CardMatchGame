@@ -1,6 +1,6 @@
 # CardMatchGame (School project)
 
-A little memory game I made in C++20 using Vulkan. The goal is to match Māori words with their English tranlations.
+A little memory game I made in C++20 using Vulkan. The goal is to match Māori words with their English translations.
 
 ## Download
 
