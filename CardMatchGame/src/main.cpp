@@ -25,6 +25,7 @@ constexpr float winTextMaxWidth = 1.6f; // NDC width a line is allowed to take u
 const std::string winTitleText = "You win!";
 const std::string movesLabel = "Moves: ";
 const std::string restartPromptText = "Press R to restart";
+const std::string lineSeparatr = "==============================\n\n";
 constexpr float winTextCenterX = 0.0f;
 constexpr float winTitleY = -winLineSpacing;
 constexpr float winMovesY = 0.0f;
@@ -133,6 +134,7 @@ int main() {
     bool restartWasDown = false;
     double checkPairAt = noCheckScheduled;
 
+    std::cout << lineSeparatr;
     while (!renderer.WindowShouldClose()) {
         renderer.PollEvents(); // glfw gets user input
 
@@ -150,6 +152,7 @@ int main() {
                 break;
             }
             std::cout << "Restarted\n";
+            std::cout << lineSeparatr;
         }
         restartWasDown = restartIsDown;
 
@@ -199,9 +202,10 @@ int main() {
         // so that TryFlipCard rejects any new clicks
         if (game.HasPendingPair() && renderer.GetTime() >= checkPairAt) {
             bool matched = game.CheckPair();
-            std::cout << (matched ? "Match!\n" : "No match - flipping back\n");
+            std::cout << (matched ? "Match!\n\n" : "No match - flipping back\n\n");
 
             if (matched && game.IsComplete()) {
+                std::cout << lineSeparatr;
                 std::cout << "You matched every word! Press R to play again or Escape to quit.\n";
             }
         }
