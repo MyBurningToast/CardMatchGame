@@ -25,7 +25,7 @@ constexpr float winTextMaxWidth = 1.6f; // NDC width a line is allowed to take u
 const std::string winTitleText = "You win!";
 const std::string movesLabel = "Moves: ";
 const std::string restartPromptText = "Press R to restart";
-const std::string lineSeparatr = "==============================\n\n";
+const std::string lineSeparator = "==============================\n\n";
 constexpr float winTextCenterX = 0.0f;
 constexpr float winTitleY = -winLineSpacing;
 constexpr float winMovesY = 0.0f;
@@ -134,7 +134,7 @@ int main() {
     bool restartWasDown = false;
     double checkPairAt = noCheckScheduled;
 
-    std::cout << lineSeparatr;
+    std::cout << lineSeparator;
     while (!renderer.WindowShouldClose()) {
         renderer.PollEvents(); // glfw gets user input
 
@@ -151,8 +151,8 @@ int main() {
                 std::cerr << "Failed to restart: " << gridError << "\n";
                 break;
             }
-            std::cout << "Restarted\n";
-            std::cout << lineSeparatr;
+            std::cout << "Restarted\n\n";
+            std::cout << lineSeparator;
         }
         restartWasDown = restartIsDown;
 
@@ -205,7 +205,7 @@ int main() {
             std::cout << (matched ? "Match!\n\n" : "No match - flipping back\n\n");
 
             if (matched && game.IsComplete()) {
-                std::cout << lineSeparatr;
+                std::cout << lineSeparator;
                 std::cout << "You matched every word! Press R to play again or Escape to quit.\n";
             }
         }
